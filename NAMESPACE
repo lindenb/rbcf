@@ -1,0 +1,4 @@
+useDynLib(rbcf)
+
+export("bcf.open")
+export("bcf.close")

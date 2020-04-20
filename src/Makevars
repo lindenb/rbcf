@@ -1,0 +1,19 @@
+CC:=gcc
+
+
+HTSDIR=htslib
+OBJECTS=librbcf.o $(HTSDIR)/libhts.a
+PKG_CFLAGS=
+PKG_CPPFLAGS+=-I$(HTSDIR)
+PKG_LIBS+=-L$(HTSDIR) -lhts s -lm -lz -lpthread -lcurl -llzma -lR
+
+  
+$(HTSDIR)/libhts.a: $(HTSDIR)/Makefile
+	cd htslib && make libhts.a
+
+$(HTSDIR)/Makefile:
+	(cd .. && git submodule update --init)
+
+clean:
+	rm -f librbcf.so
+	cd $(HTSDIR) && make clean

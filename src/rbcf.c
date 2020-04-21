@@ -25,7 +25,11 @@ THE SOFTWARE.
 #include <R.h>
 #include <Rinternals.h>
 #include <Rdefines.h>
+#ifdef SRS_BCF
 #include "htslib/synced_bcf_reader.h"
+#else
+#include "htslib/vcf.h"
+#endif
 #include "htslib/khash.h"
 KHASH_MAP_INIT_STR(vdict, bcf_idinfo_t)
 
@@ -37,26 +41,40 @@ KHASH_MAP_INIT_STR(vdict, bcf_idinfo_t)
 #define final
 #define null NULL
 
+
 /**
  * Structure holding the VCF file , the header and the index
  */ 
 typedef struct rbcffile_t
 	{
+#ifdef BCF_SRS
 	bcf_srs_t *files;
+#else
+	htsFile *fp;
+#endif
 	/* header */
 	bcf_hdr_t *hdr;
-	/** map sample2index */
-	void* sample2idx;
 	}RBcfFile,*RBcfFilePtr;
 
 static void RBcfFileFree(final RBcfFilePtr ptr) {
 	if (ptr==NULL) return;
+
+#ifdef BCF_SRS
 	if (ptr->files!=NULL) {
-		 bcf_sr_destroy(ptr->files);
+		bcf_sr_destroy(ptr->files);
 		}
-	if(ptr->sample2idx!=NULL) {
-		khash_str2int_destroy(ptr->sample2idx);
+#else
+	if(ptr->hdr!=NULL) {
+		bcf_hdr_destroy(ptr->hdr);
 		}
+	if (ptr->fp!=NULL) {
+		hts_close(ptr->fp);
+		}
+https://github.com/samtools/bcftools/blob/dccba248adb120f5abc6929ba8175d694cb273be/plugins/check-sparsity.c
+	    if ( args->itr ) hts_itr_destroy(args->itr);
+    if ( args->tbx ) tbx_destroy(args->tbx);
+    if ( args->idx ) hts_idx_destroy(args->idx);
+#endif
 	Free(ptr);
 	}
 
@@ -83,7 +101,7 @@ static void RBcfFileFinalizer(SEXP handle)
 /**
  * Open BCF file
  */
-SEXP RBcfFileOpen(SEXP Rfilename)
+SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx)
 	{
 	int i;
 	RBcfFilePtr handler =  NULL;
@@ -99,6 +117,7 @@ SEXP RBcfFileOpen(SEXP Rfilename)
 		LOG("Out of memory");
 		goto die;
 		}
+#ifdef BCF_SRS
 	handler->files = bcf_sr_init();
 	if (handler->files==NULL) {
 		LOG("Cannot init %s.",filename,"");
@@ -114,16 +133,30 @@ SEXP RBcfFileOpen(SEXP Rfilename)
 	
 		
 	handler->hdr =  handler->files->readers[0].header;
+#else
+	handler->fp = hts_open(filename,"rb");
+	if (handler->fp==NULL) {
+		LOG("Failed to read from %s: %s\n",
+			filename,
+			bcf_sr_strerror(handler->files->errnum)
+			);
+		goto die;
+		}
+	handler->bcf_hdr_read(handler->fp);
+	if(asBoolean(todo)) {
+		   if ( hts_get_format(args->fp)->format==vcf )
+		 args->tbx = tbx_index_load(args->fname);
+		  else if ( hts_get_format(args->fp)->format==bcf )
+		 args->idx = bcf_index_load(args->fname);
+	}
+#endif
+
+
 	if(handler->hdr==NULL) {
 		LOG("Cannot read header from %s.",filename);
 		goto die;
 		}
-	/** fill map(sampleid,index) */
-	handler->sample2idx = khash_str2int_init();
-	ASSERT_NOT_NULL(handler->sample2idx);
-    for (i=0; i<bcf_hdr_nsamples(handler->hdr); i++) {
-        khash_str2int_inc(handler->sample2idx, bcf_hdr_int2id(handler->hdr,BCF_DT_SAMPLE,i));
-		}
+
 	/* wrap pointer in SEXP */
 	SEXP ext = PROTECT(R_MakeExternalPtr(handler, R_NilValue, R_NilValue));
 	/* register destructor */
@@ -176,7 +209,7 @@ SEXP RBcfSamples(SEXP handler) {
 	int i, n=0;
 	PROTECT(handler);
 	p=R_ExternalPtrAddr(handler);
-	if(p==NULL) error("Null object");
+	ASSERT_NOT_NULL(p);
 	bcf_hdr_t *hdr = (bcf_hdr_t*)p;
 	SEXP sNames = PROTECT(allocVector(STRSXP,bcf_hdr_nsamples(hdr)));
 	for(i=0;i< bcf_hdr_nsamples(hdr);++i) {
@@ -185,6 +218,64 @@ SEXP RBcfSamples(SEXP handler) {
 	UNPROTECT(2);
 	return sNames;
 	}
+
+SEXP RBcfSampleAtIndex0(SEXP handler,SEXP sexpIndex) {
+	int protect=0;
+	SEXP ext;
+	PROTECT(handler);++protect;
+	PROTECT(sexpIndex);++protect;
+	bcf_hdr_t *hdr = (bcf_hdr_t*)R_ExternalPtrAddr(handler);
+	ASSERT_NOT_NULL(hdr);
+	int idx = asInteger(sexpIndex);
+	if(idx<0 || idx >= bcf_hdr_nsamples(hdr)) {
+		warning("sample idx out of rang %d/%d\n",bcf_hdr_nsamples(hdr));
+		ext = R_NilValue;
+		}
+	else
+		{
+		ext =  mkChar(hdr->samples[i]);
+		}
+	UNPROTECT(protect);
+	return ext;
+	}
+
+SEXP RBcfHeaderDict(SEXP sexpHeader) {
+	int protect=0;
+	SEXP res,vChrom,vSize;
+	PROTECT(handler);++protect;
+	bcf_hdr_t *hdr = (bcf_hdr_t*)R_ExternalPtrAddr(handler);
+	ASSERT_NOT_NULL(hdr);
+	khint_t k;
+	vdict_t *d = (vdict_t*)h->dict[BCF_DT_CTG];
+	int dict_size=  hdr->n[BCF_DT_CTG];
+	PROTECT(res = Rf_allocVector(VECSXP,2));protect++;
+	PROTECT(vChrom = Rf_allocVector(VECSXP,dict_size)); protect++;
+   	PROTECT(vSize = Rf_allocVector(VECSXP, dict_size)); protect++;
+	
+	
+	for (i=0; i< dict_size; i++) {
+		if ( !kh_exist(d,k) ) continue;
+		int tid = kh_val(d,k).id;
+		assert( tid<m );
+		SET_VECTOR_ELT(vChrom, tid, vChrom);
+		names[tid] = kh_key(d,k);
+	    	}
+
+	
+	/* set the columns of the table */
+	SET_VECTOR_ELT(res, 0, vChrom);
+  	SET_VECTOR_ELT(res, 1, vSize);
+
+	/* set the columns' name of the table */
+	SEXP sNames = PROTECT(allocVector(STRSXP, 2));protect++;
+	SET_STRING_ELT(sNames, 0, mkChar("chrom"));
+	SET_STRING_ELT(sNames, 1, mkChar("size"));
+	setAttrib(res, R_NamesSymbol, sNames);
+	
+	UNPROTECT(protect);
+	return res;
+	}
+
 
 SEXP RBcfQueryRegion(SEXP handler,SEXP sexpInterval,SEXP sexpRegionIsFile) {
 	RBcfFilePtr ptr = NULL;

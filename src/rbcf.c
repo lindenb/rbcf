@@ -114,7 +114,7 @@ SEXP RBcfFileOpen(SEXP Rfilename)
 	SEXP ext = PROTECT(R_MakeExternalPtr(handler, R_NilValue, R_NilValue));
 	/* register destructor */
 	R_RegisterCFinalizerEx(ext,RBcfFileFinalizer, TRUE);
-     	UNPROTECT(1);
+     UNPROTECT(1);
 	return ext;
 	
 	die:
@@ -122,6 +122,54 @@ SEXP RBcfFileOpen(SEXP Rfilename)
 			RBcfFileFree(handler);
 			}
 	return R_NilValue;
+	}
+
+void RBcfHeaderFinalizer(SEXP handler) {
+	void* p=R_ExternalPtrAddr(handler);
+	if(p==NULL) return;
+	bcf_hdr_destroy((bcf_hdr_t*)p);
+	}
+	
+SEXP RBcfHeader(SEXP handler) {
+	void *p = NULL;
+	int n=0;
+	PROTECT(handler);
+	p=R_ExternalPtrAddr(handler);
+	if(p==NULL) error("Null object");
+	bcf_hdr_t *hdr = ((RBcfFilePtr)p)->hdr;
+	if(hdr==NULL) error("Cannot get header");
+	hdr = bcf_hdr_dup(hdr);
+	if(hdr==NULL) error("Cannot dup header");
+	SEXP ext = PROTECT(R_MakeExternalPtr(hdr, R_NilValue, R_NilValue));
+	R_RegisterCFinalizerEx(ext,RBcfHeaderFinalizer, TRUE);
+	UNPROTECT(2);
+	return ext;
+	}
+
+SEXP RBcfNSamples(SEXP handler) {
+	void *p = NULL;
+	int n=0;
+	PROTECT(handler);
+	p=R_ExternalPtrAddr(handler);
+	if(p==NULL) error("Null object");
+	n = (int)bcf_hdr_nsamples((bcf_hdr_t*)p);
+	UNPROTECT(1);
+	return ScalarInteger(n);
+	}
+
+SEXP RBcfSamples(SEXP handler) {
+	void *p = NULL;
+	int i, n=0;
+	PROTECT(handler);
+	p=R_ExternalPtrAddr(handler);
+	if(p==NULL) error("Null object");
+	bcf_hdr_t *hdr = (bcf_hdr_t*)p;
+	SEXP sNames = PROTECT(allocVector(STRSXP,bcf_hdr_nsamples(hdr)));
+	for(i=0;i< bcf_hdr_nsamples(hdr);++i) {
+		SET_STRING_ELT(sNames, i , mkChar(hdr->samples[i]));
+		}
+	UNPROTECT(2);
+	return sNames;
 	}
 
 /*

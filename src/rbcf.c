@@ -259,7 +259,7 @@ SEXP RBcfCtxSeqName(SEXP sexpheader,SEXP sexpctx) {
 	PROTECT(sexpheader);protect++;
 	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
 	ASSERT_NOT_NULL(ctx);
-	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpctx);
+	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(ctx);
 	ext = mkChar(bcf_seqname(hdr,ctx));
 	UNPROTECT(protect);
@@ -278,6 +278,39 @@ SEXP RBcfCtxPos(SEXP sexpheader,SEXP sexpctx) {
 	UNPROTECT(protect);
 	return ext;
 	}
+
+SEXP RBcfCtxHasId(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	int tid = -1;
+	bcf1_t *ctx = NULL;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	ext = ScalarLogical(ctx->d.id);
+	UNPROTECT(protect);
+	return ext;
+	}
+
+SEXP RBcfCtxId(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	int tid = -1;
+	bcf1_t *ctx = NULL;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	if(ctx->d.id) {
+		ext = mkChar(ctx->d.id);
+		}
+	else
+		{
+		ext  =	R_NilValue;
+		}
+	UNPROTECT(protect);
+	return ext;
+	}
+
 
 SEXP RBcfCtxEnd(SEXP sexpheader,SEXP sexpctx) {
 	int protect=0;
@@ -365,10 +398,185 @@ SEXP RBcfCtxAlternateAlleles(SEXP sexpheader,SEXP sexpctx) {
 	UNPROTECT(protect);
 	return ext;
 	}
+	
+SEXP RBcfCtxHasQual(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	bcf1_t *ctx;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	ext = ScalarLogical(!bcf_float_is_missing(ctx->qual));
+	UNPROTECT(protect);
+	return ext;
+	}
 
- 
+SEXP RBcfCtxQual(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	bcf1_t *ctx;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	if(bcf_float_is_missing(ctx->qual)) {
+		ctx = R_NilValue;
+		}
+	else
+		{
+		ext = ext = ScalarNumeric(ctx->qual);
+		}
+	UNPROTECT(protect);
+	return ext;
+	}
+
+
+SEXP RBcfCtxFiltered(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	bcf1_t *ctx;
+	bcf_hdr_t* hdr;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	PROTECT(sexpheader);protect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
+	ASSERT_NOT_NULL(hdr);
+	ext = ScalerLogical(!bcf_has_filter(hdr,ctx,"PASS"));
+	UNPROTECT(protect);
+	return ext;
+	}
+
+SEXP RBcfCtxFilters(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	bcf1_t *ctx;
+	bcf_hdr_t* hdr;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	PROTECT(sexpheader);protect++;
+	
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
+	ASSERT_NOT_NULL(hdr);
+	
+	if(bcf_has_filter(hdr,ctx,"PASS")) {
+		ext = PROTECT(allocVector(STRSXP,0));protect++;
+		}
+	else
+		{
+		ext = PROTECT(allocVector(STRSXP,ctx->n_flt));protect++;
+		for(i=0;i< ctx->n_flt;++i) {
+			SET_STRING_ELT(ext, i , mkChar(hdr->id[BCF_DT_ID][ctx->d.flt[i]].key));
+			}
+		}
+	UNPROTECT(protect);
+	return ext;
+	}
+
+SEXP RBcfCtxVariantTypes(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	bcf1_t *ctx;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	ext = ScalarInteger(bcf_get_variant_types(ctx));
+	UNPROTECT(protect);
+	return ext;
+	}
+	
+SEXP RBcfCtxVariantIsSnp(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	bcf1_t *ctx;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	ext = ScalarLogical(bcf_is_snp(ctx));
+	UNPROTECT(protect);
+	return ext;
+	}
+
+SEXP RBcfCtxVariantMaxPloidy(SEXP sexpheader,SEXP sexpctx) {
+	int protect=0;
+	bcf1_t *ctx;
+	bcf_hdr_t* hdr;
+	int32_t *gt_arr = NULL, ngt_arr = 0;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	PROTECT(sexpheader);protect++;
+	
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
+	ASSERT_NOT_NULL(hdr);
+	
+	ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+	if ( ngt<=0 ) {
+		ext = ScalarInteger(0);
+		}
+	else
+		{
+		int nsmpl = bcf_hdr_nsamples(hdr);
+	 	ext = ScalarInteger(ngt/nsmpl);
+	 	}
+	UNPROTECT(protect);
+	return ext;
+	}
+
+typedef callback_gt_fun
+
+static SEXP doSomethingGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,callback_gt_fun hook) {
+	int protect=0;
+	bcf1_t *ctx;
+	bcf_hdr_t* hdr;
+	int sample_idx = 0;
+	int32_t *gt_arr = NULL, ngt_arr = 0;
+	SEXP ext;
+	PROTECT(sexpctx);protect++;
+	PROTECT(sexpheader);protect++;
+	PROTECT(sexpgtidx);protect++;
+	
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
+	ASSERT_NOT_NULL(hdr);
+	sample_idx = asInteger(sexpgtidx);
+	if(sample_idx<0 || sample_idx>=bcf_hdr_nsamples(hdr)) error("genotype index out of range");
+	ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+	
+	ext  =hook(hdr,ctx,sample_idx);
+	UNPROTECT(protect);
+	return ext;
+	}
+
+SEXP RBcfCtxVariantGenotypePloidy
+
+     *      
+     *
+     *      int max_ploidy = ngt/nsmpl;
+     *      for (i=0; i<nsmpl; i++)
+     *      {
+     *        int32_t *ptr = gt + i*max_ploidy;
+     *        for (j=0; j<max_ploidy; j++)
+     *        {
+     *           // if true, the sample has smaller ploidy
+     *           if ( ptr[j]==bcf_int32_vector_end ) break;
+     *
+     *           // missing allele
+     *           if ( bcf_gt_is_missing(ptr[j]) ) continue;
+     *
+     *           // the VCF 0-based allele index
+     *           int allele_index = bcf_gt_allele(ptr[j]);
+     *
+     *           // is phased?
+     *           int is_phased = bcf_gt_is_phased(ptr[j]);
+     *
+
 /*
-SEXP RBcfReadHeader(SEXP handle)
+SEXP 
+
+RBcfReadHeader(SEXP handle)
 
 SEXP RBcfIterator(SEXP handle,SEXP contig,SEXP start,SEXP end) {
 

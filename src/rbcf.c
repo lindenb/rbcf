@@ -26,6 +26,8 @@ THE SOFTWARE.
 #include <Rinternals.h>
 #include <Rdefines.h>
 #include "htslib/synced_bcf_reader.h"
+#include "htslib/khash.h"
+KHASH_MAP_INIT_STR(vdict, bcf_idinfo_t)
 
 #define WHERENL REprintf("[%s:%d] ",__FILE__,__LINE__)
 #define DIE_FAILURE(FormatLiteral,...) do { WHERENL; REprintf("Exiting: " FormatLiteral "\n", ##__VA_ARGS__); exit(EXIT_FAILURE);} while(0)
@@ -43,6 +45,8 @@ typedef struct rbcffile_t
 	bcf_srs_t *files;
 	/* header */
 	bcf_hdr_t *hdr;
+	/** map sample2index */
+	void* sample2idx;
 	}RBcfFile,*RBcfFilePtr;
 
 static void RBcfFileFree(final RBcfFilePtr ptr) {
@@ -50,11 +54,14 @@ static void RBcfFileFree(final RBcfFilePtr ptr) {
 	if (ptr->files!=NULL) {
 		 bcf_sr_destroy(ptr->files);
 		}
+	if(ptr->sample2idx!=NULL) {
+		khash_str2int_destroy(ptr->sample2idx);
+		}
 	Free(ptr);
 	}
 
 /**
- * Close resources associated to bwa
+ * Close resources associated 
  */
 SEXP RBcfFileClose(SEXP handle) {	
 	void *p = R_ExternalPtrAddr(handle);
@@ -78,6 +85,7 @@ static void RBcfFileFinalizer(SEXP handle)
  */
 SEXP RBcfFileOpen(SEXP Rfilename)
 	{
+	int i;
 	RBcfFilePtr handler =  NULL;
 	
 	const char* filename= CHAR(asChar(Rfilename));
@@ -109,6 +117,12 @@ SEXP RBcfFileOpen(SEXP Rfilename)
 	if(handler->hdr==NULL) {
 		LOG("Cannot read header from %s.",filename);
 		goto die;
+		}
+	/** fill map(sampleid,index) */
+	handler->sample2idx = khash_str2int_init();
+	ASSERT_NOT_NULL(handler->sample2idx);
+    for (i=0; i<bcf_hdr_nsamples(handler->hdr); i++) {
+        khash_str2int_inc(handler->sample2idx, bcf_hdr_int2id(handler->hdr,BCF_DT_SAMPLE,i));
 		}
 	/* wrap pointer in SEXP */
 	SEXP ext = PROTECT(R_MakeExternalPtr(handler, R_NilValue, R_NilValue));
@@ -524,15 +538,25 @@ SEXP RBcfCtxVariantMaxPloidy(SEXP sexpheader,SEXP sexpctx) {
 	return ext;
 	}
 
-typedef callback_gt_fun
+struct GenotypeShuttle {
+	int phased;
+	int nocall;
+	int* alleles;
+	size_t allele_count;
+	size_t allele_capacity;
+	int error_flag;
+	};
 
-static SEXP doSomethingGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,callback_gt_fun hook) {
+
+
+static void scanGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,struct GenotypeShuttle* shuttle) {
 	int protect=0;
 	bcf1_t *ctx;
 	bcf_hdr_t* hdr;
 	int sample_idx = 0;
 	int32_t *gt_arr = NULL, ngt_arr = 0;
 	SEXP ext;
+	memset((void*)shuttle,0,sizeof(struct GenotypeShuttle));
 	PROTECT(sexpctx);protect++;
 	PROTECT(sexpheader);protect++;
 	PROTECT(sexpgtidx);protect++;
@@ -541,158 +565,63 @@ static SEXP doSomethingGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,call
 	ASSERT_NOT_NULL(ctx);
 	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
-	sample_idx = asInteger(sexpgtidx);
-	if(sample_idx<0 || sample_idx>=bcf_hdr_nsamples(hdr)) error("genotype index out of range");
-	ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
 	
-	ext  =hook(hdr,ctx,sample_idx);
-	UNPROTECT(protect);
-	return ext;
-	}
-
-SEXP RBcfCtxVariantGenotypePloidy
-
-     *      
-     *
-     *      int max_ploidy = ngt/nsmpl;
-     *      for (i=0; i<nsmpl; i++)
-     *      {
-     *        int32_t *ptr = gt + i*max_ploidy;
-     *        for (j=0; j<max_ploidy; j++)
-     *        {
-     *           // if true, the sample has smaller ploidy
-     *           if ( ptr[j]==bcf_int32_vector_end ) break;
-     *
-     *           // missing allele
-     *           if ( bcf_gt_is_missing(ptr[j]) ) continue;
-     *
-     *           // the VCF 0-based allele index
-     *           int allele_index = bcf_gt_allele(ptr[j]);
-     *
-     *           // is phased?
-     *           int is_phased = bcf_gt_is_phased(ptr[j]);
-     *
-
-/*
-SEXP 
-
-RBcfReadHeader(SEXP handle)
-
-SEXP RBcfIterator(SEXP handle,SEXP contig,SEXP start,SEXP end) {
-
-
-	}
-
-SEXP RBcfIteratorNext(SEXP handle,SEXP header) {
-	handle
-	if(bcf_sr_next_line(ptr->files)) {
-		bcf1_t *line = ptr->files->readers[0].buffer[0];
-		if ( line->errcode ) error("Error while reading VCF/BCF file\n");
-		}
+	if(IS_CHARACTER(sexpgtidx))
+		{
+		khint_t k;
+		vdict_t* d = NULL;
+		const char* sn = CHAR(asChar(sexpgtidx));
+		if(sn==NULL) {
+			shuttle->error_flag  = 1;
+			return;
+			}
+		sample_idx = bcf_hdr_id2int(hdr,BCF_DT_SAMPLE,sn);
+		if(sample_idx<0) {
+			warning("unknown sample %s",sn);
+			shuttle->error_flag  = 1;
+			return;
+			}
+        }
 	else
 		{
-		return R_NilValue;
+		sample_idx = asInteger(sexpgtidx);
 		}
-	SEXP ext = PROTECT(R_MakeExternalPtr(b, R_NilValue, R_NilValue));
-	R_RegisterCFinalizerEx(ext,_RBcf1Destroy, TRUE);
-	return ext,
-	}
-*/
-
-#ifdef XXX
-SEXP RBwaMap(SEXP handle,SEXP readseqR)
-	{
-	SEXP res, vChrom,vPos,vStrand,vMapq,vSecondary,vNM,cls,rownam;
-	int nprotect=0;
-	RBwaHandlerPtr handler;
-	mem_alnreg_v ar;
-	int i;
-	kseq_t ks;
-	const char* seq= CHAR(STRING_ELT(readseqR, 0));
-	/* check DNA sequence */
-	if(seq==NULL) DIE_FAILURE("NULL seq");
-	/* retrieve and cast handler */
-	handler=(RBwaHandlerPtr)R_ExternalPtrAddr(handle);
 	
-	/* initialize short read */	
-	memset((void*)&ks,0,sizeof(kseq_t));
-	ks.seq.l=strlen(seq);
-	ks.seq.s=(char*)seq;
-	
-	/* run allign */
-	ar = mem_align1(handler->opt,
-		handler->idx->bwt,
-		handler->idx->bns,
-		handler->idx->pac,
-		ks.seq.l,
-		ks.seq.s
-		); // get all the hits
-	
-
-	/* prepare the table and its columns */
-	PROTECT(res = Rf_allocVector(VECSXP,6));nprotect++;
-	PROTECT(vChrom = Rf_allocVector(VECSXP,ar.n)); nprotect++;
-   	PROTECT(vPos = Rf_allocVector(VECSXP, ar.n)); nprotect++;
-  	PROTECT(vStrand = Rf_allocVector(VECSXP,ar.n));nprotect++;
-	PROTECT(vMapq = Rf_allocVector(VECSXP, ar.n));nprotect++;
-	PROTECT(vNM = Rf_allocVector(VECSXP, ar.n));nprotect++;
-	PROTECT(vSecondary = Rf_allocVector(VECSXP, ar.n));nprotect++;
-	
-	/** set the table as a data.frame */
-	PROTECT(cls = allocVector(STRSXP, 1)); nprotect++;
-  	SET_STRING_ELT(cls, 0, mkChar("data.frame"));
-   	classgets(res, cls);
-	
-	
-
-	/* set the columns of the table */
-	SET_VECTOR_ELT(res, 0, vChrom);
-  	SET_VECTOR_ELT(res, 1, vPos);
-	SET_VECTOR_ELT(res, 2, vStrand);
-	SET_VECTOR_ELT(res, 3, vMapq);
-	SET_VECTOR_ELT(res, 4, vNM);
-	SET_VECTOR_ELT(res, 5, vSecondary);
-
-	/* set the columns' name of the table */
-	SEXP sNames = PROTECT(allocVector(STRSXP, 6));nprotect++;
-	SET_STRING_ELT(sNames, 0, mkChar("chrom"));
-	SET_STRING_ELT(sNames, 1, mkChar("pos"));
-	SET_STRING_ELT(sNames, 2, mkChar("strand"));
-	SET_STRING_ELT(sNames, 3, mkChar("mapq"));
-	SET_STRING_ELT(sNames, 4, mkChar("NM"));
-	SET_STRING_ELT(sNames, 5, mkChar("secondary"));
-	setAttrib(res, R_NamesSymbol, sNames);
-
-	/* loop over the hits */
-	for (i = 0; i < ar.n; ++i)
-		{
-		mem_aln_t a = mem_reg2aln(handler->opt, handler->idx->bns, handler->idx->pac, ks.seq.l, ks.seq.s, &ar.a[i]);
-		SET_VECTOR_ELT(vChrom, i , mkString(handler->idx->bns->anns[a.rid].name));
-		SET_VECTOR_ELT(vPos, i ,ScalarInteger((long)a.pos));
-		SET_VECTOR_ELT(vStrand, i ,ScalarInteger((int)a.is_rev));
-		SET_VECTOR_ELT(vMapq, i ,ScalarInteger((int)a.mapq));
-		SET_VECTOR_ELT(vNM, i ,ScalarInteger((int)a.NM));
-		SET_VECTOR_ELT(vSecondary, i ,ScalarInteger((int)(ar.a[i].secondary >= 0)));
-		free(a.cigar);
-		}	
-	free(ar.a);
-		
-	
-	/** set the row names */
-	PROTECT(rownam = allocVector(STRSXP, ar.n));nprotect++; // row.names attribute
-	for (i = 0; i < ar.n; ++i)
-		{
-		char rname[20];
-		sprintf(rname,"%d",i+1);
-		SET_STRING_ELT(rownam, i ,mkChar(rname));
+	if(sample_idx<0 || sample_idx>=bcf_hdr_nsamples(hdr)) {
+		warning("bad sample index 0<=%d<%d",sample_idx,bcf_hdr_nsamples(hdr));
+		shuttle->error_flag  = 1;
+		return;
 		}
-	setAttrib(res, R_RowNamesSymbol, rownam);
-
+	ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+	 int max_ploidy = ngt/nsmpl;
+     
+      int32_t *ptr = gt + i*sample_idx;
+      for (j=0; j<max_ploidy; j++)
+          {
+	         // if true, the sample has smaller ploidy
+	         if ( ptr[j]==bcf_int32_vector_end ) break;
+  
+	         // missing allele
+	         if ( bcf_gt_is_missing(ptr[j]) ) continue;
+  
+  			 // is phased?
+  			 if(bcf_gt_is_phased(ptr[j]) {
+	         	shuttle->phased = 1;
+	         	}
+  
+	         // the VCF 0-based allele index
+	         int allele_index = bcf_gt_allele(ptr[j]);
+  			 if(shuttle->alleles != NULL) {
+  			 	if(shuttle->allele_count + 1 >= shuttle->allele_capacity) {
+  			 		shuttle->allele_capacity++;
+  			 		shuttle->alleles = (int*)Realloc(shuttle->alleles,shuttle->allele_capacity);
+  			 		ASSERT_NOT_NULL(shuttle->alleles);	
+  			 		}
+  			 	shuttle->alleles[shuttle->allele_count] = allele_index ;
+  			 	}
+  			shuttle->allele_count++;
+  		    }
 	
-
-	UNPROTECT(nprotect);
-	return res;
+	UNPROTECT(protect);
 	}
-
-#endif
 

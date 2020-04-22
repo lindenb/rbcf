@@ -1,7 +1,7 @@
 library(rbcf)
 
-test01<-function(filename,hasIndex) {
-	fp <- bcf.open(filename)
+test01<-function(filename,requireIndex) {
+	fp <- bcf.open(filename,requireIndex)
 	stopifnot(fp!=NULL)
 	hdr <- bcf.hdr(fp)
 	stopifnot(bcf.hdr.nsamples(hdr)==5)

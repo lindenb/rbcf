@@ -1,7 +1,9 @@
 
-bcf.open<-function(filename)
+bcf.open<-function(filename,requireIndex)
 	{
-	.Call("RBcfFileOpen",filename);
+	assert(is.character(filename))
+	assert(is.logical(requireIndex))
+	.Call("RBcfFileOpen",filename,requireIndex);
 	}
 bcf.close<-function(fp)
 	{

@@ -1,7 +1,7 @@
 HTSDIR=htslib
 OBJECTS=rbcf.o $(HTSDIR)/libhts.a
 PKG_CFLAGS=
-PKG_CPPFLAGS+=-I$(HTSDIR) 
+PKG_CPPFLAGS+=-I$(HTSDIR) -Wall
 PKG_LIBS+=-L$(HTSDIR) -lcurl
 
 all: $(SHLIB)
@@ -10,9 +10,12 @@ $(SHLIB) : $(HTSDIR)/libhts.a
 
 #librbcf.so: $(SHLIB)  $(HTSDIR)/libhts.a
 
-$(HTSDIR)/libhts.so: $(HTSDIR)/Makefile
+$(HTSDIR)/libhts.so : $(HTSDIR)/Makefile
 	cd htslib && make libhts.so
 
+$(HTSDIR)/libhts.a : $(HTSDIR)/Makefile
+	cd htslib && make libhts.a
+	
 $(HTSDIR)/Makefile:
 	(cd .. && git submodule update --init)
 

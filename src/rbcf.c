@@ -851,7 +851,6 @@ SEXP RBcfCtxVariantGtPhased(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx) {
 	}
 	
 SEXP RBcfCtxVariantAttributeAsString(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) {
-	int i=0;
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
@@ -864,24 +863,51 @@ SEXP RBcfCtxVariantAttributeAsString(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) 
 	ASSERT_NOT_NULL(hdr);
 	const char* att = CHAR(asChar(sexpatt));
 	ASSERT_NOT_NULL(att);
-	char** dst=NULL;
+	char* dst=NULL;
 	int ndst=0;
 	bcf_unpack(ctx,BCF_UN_INFO);
-	LOG("ici");
 	int ret=bcf_get_info_string(hdr,ctx,att,(void**)&dst,&ndst);
-	LOG("ici2");
 	if(ret<0 || dst==NULL) {
 		ext = R_NilValue;
 		}
 	else
 		{
-		ext = PROTECT(allocVector(STRSXP,ndst));nprotect++;
-		for(i=0;i< ndst;++i) {
-			ASSERT_NOT_NULL(dst[i]);
-			SET_STRING_ELT(ext, i , mkChar(dst[i]));
-			}
+		ext = mkString(dst);
 		}
-	//free(dst);
+	free(dst);
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+SEXP RBcfCtxVariantAttributeAsInt32(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) {
+	int nprotect=0;
+	bcf1_t *ctx;
+	SEXP ext;
+	PROTECT(sexpheader);nprotect++;
+	PROTECT(sexpctx);nprotect++;
+	PROTECT(sexpatt);nprotect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	bcf_hdr_t* hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
+	ASSERT_NOT_NULL(hdr);
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(att);
+	int32_t* dst=NULL;
+	int ndst=0;
+	bcf_unpack(ctx,BCF_UN_INFO);
+	int ret=bcf_get_info_int32(hdr,ctx,att,(void**)&dst,&ndst);
+	if(ret<0 || dst==NULL ) {
+		ext = R_NilValue;
+		}
+	else
+		{
+		PROTECT(ext = Rf_allocVector(INTSXP,ndst)); nprotect++;
+                for(int i=0;i< ndst;i++) {
+                       	INTEGER(ext)[i] = dst[i];
+                        }
+		
+		}
+	free(dst);
 	UNPROTECT(nprotect);
 	return ext;
 	}

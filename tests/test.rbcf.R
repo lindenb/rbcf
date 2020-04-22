@@ -48,8 +48,12 @@ test01<-function(filename,requireIndex) {
 		cat(variant.is.snp(hdr,vc),file=stderr())
 		cat(" ploidy:",file=stderr())
 		cat(variant.max.ploidy(hdr,vc),file=stderr())
-		cat(" att.str:",file=stderr())
-		cat(variant.string.attribute(hdr,vc,"CSQ"),file=stderr())
+		cat(" att.str:[",file=stderr())
+		cat(variant.string.attributes(hdr,vc,"CSQ"),file=stderr())
+		cat("] ",file=stderr())
+		cat(" att.str:[",file=stderr())
+		cat(variant.int.attributes(hdr,vc,"DP"),file=stderr())
+		cat("] ",file=stderr())
 		
 		
 		cat("\n",file=stderr())

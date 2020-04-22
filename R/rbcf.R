@@ -435,7 +435,22 @@ variant.gt.phased  <-function(hdr,vc,nameOrIdx) {
 #' @param vcf the variant
 #' @param att the INFO/Attribute
 #' @return the the INFO attribute for the given key
-variant.string.attribute<-function(hdr,vc,att) {
+variant.string.attributes <-function(hdr,vc,att) {
 	stopifnot(is.character(att))
-	.Call("RBcfCtxVariantAttributeAsString",hdr,vc,att);
+	s <- .Call("RBcfCtxVariantAttributeAsString",hdr,vc,att)
+	v <- NULL
+	if( is.null(s) || length(s)==0) {
+		NULL
+	} else {
+	     unlist(strsplit(s, split=","))
+	     }
+	}
+
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param att the INFO/Attribute
+#' @return the the INFO attribute for the given key
+variant.int.attributes <-function(hdr,vc,att) {
+	stopifnot(is.character(att))
+	.Call("RBcfCtxVariantAttributeAsInt32",hdr,vc,att)
 	}

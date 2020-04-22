@@ -55,3 +55,4 @@ dkms.conf
 *~
 jeter*
 *.tar.gz
+src/htslib

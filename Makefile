@@ -16,6 +16,11 @@ install2:
 uninstall:
 	R CMD REMOVE $(NAME) || true
 
+local:
+	$(MAKE) uninstall || true
+	$(MAKE) install2
+	$(MAKE) test
+
 test:
 	cd tests && R --no-save < test.rbcf.R
 

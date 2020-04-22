@@ -39,5 +39,5 @@ export(variant.gt.homvar)
 export(variant.gt.hetnonref)
 export(variant.gt.nocall )
 export(variant.gt.phased )
-export(variant.string.attribute)
-
+export(variant.string.attributes)
+export(variant.int.attributes)

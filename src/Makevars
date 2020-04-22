@@ -17,8 +17,9 @@ $(HTSDIR)/libhts.a : $(HTSDIR)/Makefile
 	cd htslib && make libhts.a
 	
 $(HTSDIR)/Makefile:
-	(cd .. && git submodule update --init)
+	test -f $@ || git clone --branch 1.10.2 --depth 1 "https://github.com/samtools/htslib" $(HTSDIR)
+	sed -i '/^CFLAGS/s/$$/ -fPIC/' $@
 
 clean:
 	rm -f librbcf.so
-	cd $(HTSDIR) && make clean
+	rm -rf "$(HTSDIR)"

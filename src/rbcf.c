@@ -428,9 +428,9 @@ SEXP RBcfNextLine(SEXP handler) {
 	 if ( line !=NULL ) {
 	 	line = bcf_dup(line);
 	 	ASSERT_NOT_NULL(line);
+	 	
 	 	ext = PROTECT(R_MakeExternalPtr(line, R_NilValue, R_NilValue));nprotect++;
 	 	R_RegisterCFinalizerEx(ext,RBcf1Finalizer, TRUE);
-
 	 	}
 	 else
 		 {
@@ -541,13 +541,15 @@ SEXP RBcfCtxNAlleles(SEXP sexpheader,SEXP sexpctx) {
 SEXP RBcfCtxAlleles(SEXP sexpheader,SEXP sexpctx) {
 	int i=0;
 	int nprotect=0;
-	bcf1_t *ctx = NULL;
 	SEXP ext;
 	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	bcf1_t * ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
 	ASSERT_NOT_NULL(ctx);
+	bcf_unpack(ctx,BCF_UN_STR);
 	ext = PROTECT(allocVector(STRSXP,ctx->n_allele));nprotect++;
 	for(i=0;i< ctx->n_allele;++i) {
+		ASSERT_NOT_NULL(ctx->d.allele);
+		ASSERT_NOT_NULL(ctx->d.allele[i]);
 		SET_STRING_ELT(ext, i , mkChar(ctx->d.allele[i]));
 		}
 	UNPROTECT(nprotect);
@@ -561,6 +563,7 @@ SEXP RBcfCtxReference(SEXP sexpheader,SEXP sexpctx) {
 	PROTECT(sexpctx);nprotect++;
 	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
 	ASSERT_NOT_NULL(ctx);
+	bcf_unpack(ctx,BCF_UN_STR);
 	if(ctx->n_allele>0) {
 		ext = mkString(ctx->d.allele[0]);
 		}
@@ -579,6 +582,7 @@ SEXP RBcfCtxAlternateAlleles(SEXP sexpheader,SEXP sexpctx) {
 	SEXP ext;
 	PROTECT(sexpctx);nprotect++;
 	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	bcf_unpack(ctx,BCF_UN_STR);
 	ASSERT_NOT_NULL(ctx);
 	ext = PROTECT(allocVector(STRSXP,(ctx->n_allele<1?0:ctx->n_allele-1)));nprotect++;
 	for(i=1;i< ctx->n_allele;++i) {
@@ -628,6 +632,7 @@ SEXP RBcfCtxFiltered(SEXP sexpheader,SEXP sexpctx) {
 	PROTECT(sexpheader);nprotect++;
 	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
 	ASSERT_NOT_NULL(ctx);
+	bcf_unpack(ctx,BCF_UN_FLT);
 	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
 	ext = ScalarLogical(!bcf_has_filter(hdr,ctx,"PASS"));
@@ -648,6 +653,7 @@ SEXP RBcfCtxFilters(SEXP sexpheader,SEXP sexpctx) {
 	ASSERT_NOT_NULL(ctx);
 	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
+	bcf_unpack(ctx,BCF_UN_FLT);
 	
 	if(bcf_has_filter(hdr,ctx,"PASS")) {
 		ext = PROTECT(allocVector(STRSXP,0));nprotect++;
@@ -698,6 +704,8 @@ SEXP RBcfCtxVariantMaxPloidy(SEXP sexpheader,SEXP sexpctx) {
 	
 	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
 	ASSERT_NOT_NULL(ctx);
+	bcf_unpack(ctx,BCF_UN_IND);
+	
 	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
 	
@@ -738,6 +746,8 @@ static void scanGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,struct Geno
 	
 	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
 	ASSERT_NOT_NULL(ctx);
+	bcf_unpack(ctx,BCF_UN_IND);
+	
 	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
 	

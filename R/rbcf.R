@@ -333,3 +333,109 @@ variant.max.ploidy<-function(hdr,vc) {
 	.Call("RBcfCtxVariantMaxPloidy",hdr,vc);
 	}
 
+#' return the 0-based alleles indexes for the given genotype
+#' 
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param sn the sample name (slower) or the 1-based sample index 
+#' @return max ploidy
+#
+variant.gt.alleles.idx0 <-function(hdr,vc,nameOrIdx) {
+	if(is.numeric(nameOrIdx)) {
+		stopifnot(nameOrIdx>0)
+		nameOrIdx<-as.integer(nameOrIdx)-1
+		}
+	else {
+		stopifnot(is.character(nameOrIdx))
+		}
+	.Call("RBcfCtxVariantGtAllelesIndexes0",hdr,vc,nameOrIdx);
+	}
+
+
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param sn the sample name or the 1-based sample index 
+#' @return the number of alleles for the genotypes
+#
+variant.gt.ploidy <-function(hdr,vc,nameOrIdx) {
+	alleles<-variant.gt.alleles.idx0(hdr,vc,nameOrIdx)
+	v = 0;
+	if(!is.null(alleles)) v= length(alleles)
+	v
+	}
+
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param sn the sample name or the 1-based sample index 
+#' @return TRUE if genotype is diploid and all alleles are reference
+#
+variant.gt.homref <-function(hdr,vc,nameOrIdx) {
+	alleles<-variant.gt.alleles.idx0(hdr,vc,nameOrIdx)
+	!is.null(alleles) && length(alleles)==2 && alleles[1]==0 && alleles[2]==0 
+	}
+
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param sn the sample name or the 1-based sample index 
+#' @return TRUE if genotype is diploid and heterozygous
+#
+variant.gt.het <-function(hdr,vc,nameOrIdx) {
+	alleles<-variant.gt.alleles.idx0(hdr,vc,nameOrIdx)
+	!is.null(alleles) && length(alleles)==2 && alleles[1]!=alleles[2] && alleles[1]>=0 && alleles[2]>=0
+	}
+
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param sn the sample name or the 1-based sample index 
+#' @return TRUE if genotype is diploid and homozygous on alt allele
+#
+variant.gt.homvar <-function(hdr,vc,nameOrIdx) {
+	alleles<-variant.gt.alleles.idx0(hdr,vc,nameOrIdx)
+	!is.null(alleles) && length(alleles)==2 && alleles[1]>0 && alleles[2]>0 && alleles[1]==alleles[2]
+	}
+	
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param sn the sample name or the 1-based sample index 
+#' @return TRUE if genotype is diploid and heterozygous and doesn't contains the alt allele
+#
+variant.gt.hetnonref  <-function(hdr,vc,nameOrIdx) {
+	alleles<-variant.gt.alleles.idx0(hdr,vc,nameOrIdx)
+	!is.null(alleles) && length(alleles)==2 && alleles[1]!=alleles[2] && alleles[1]>0 && alleles[2]>0
+	}
+
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param sn the sample name or the 1-based sample index 
+#' @return TRUE if genotypes contains no allele '' or any is no call '.'
+#
+variant.gt.nocall  <-function(hdr,vc,nameOrIdx) {
+	alleles<-variant.gt.alleles.idx0(hdr,vc,nameOrIdx)
+	!is.null(alleles) || length(alleles)==0 || match(-1,alleles)<=0
+	}
+
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param sn the sample name or the 1-based sample index 
+#' @return TRUE if genotype is phased
+#
+variant.gt.phased  <-function(hdr,vc,nameOrIdx) {
+	if(is.numeric(nameOrIdx)) {
+		stopifnot(nameOrIdx>0)
+		nameOrIdx<-as.integer(nameOrIdx)-1
+		}
+	else {
+		stopifnot(is.character(nameOrIdx))
+		}
+	.Call("RBcfCtxVariantGtPhased",hdr,vc,nameOrIdx);
+	}
+
+
+#' @param hdr the vcf header
+#' @param vcf the variant
+#' @param att the INFO/Attribute
+#' @return the the INFO attribute for the given key
+variant.string.attribute<-function(hdr,vc,att) {
+	stopifnot(is.character(att))
+	.Call("RBcfCtxVariantAttributeAsString",hdr,vc,att);
+	}

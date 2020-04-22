@@ -819,3 +819,69 @@ static void scanGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,struct Geno
 	UNPROTECT(nprotect);
 	}
 
+SEXP RBcfCtxVariantGtAllelesIndexes0(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx) {
+	int nprotect=0;
+	struct GenotypeShuttle shuttle;
+	SEXP ext;
+	memset((void*)&shuttle,0,sizeof(struct GenotypeShuttle));
+	shuttle.allele_capacity=10;
+	shuttle.alleles =Calloc(shuttle.allele_capacity,int);
+	scanGenotype(sexpheader,sexpctx,sexpgtidx,&shuttle);
+	if(shuttle.error_flag)
+		{
+		ext = R_NilValue;
+		}
+	else
+		{
+		PROTECT(ext = Rf_allocVector(INTSXP,shuttle.allele_count)); nprotect++;
+		for(int i=0;i< shuttle.allele_count;i++) {
+			INTEGER(ext)[i] = shuttle.alleles[i];
+			}
+		}
+	Free(shuttle.alleles);
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+SEXP RBcfCtxVariantGtPhased(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx) {
+	struct GenotypeShuttle shuttle;
+	memset((void*)&shuttle,0,sizeof(struct GenotypeShuttle));
+	scanGenotype(sexpheader,sexpctx,sexpgtidx,&shuttle);
+	return ScalarLogical(shuttle.phased==1);
+	}
+	
+SEXP RBcfCtxVariantAttributeAsString(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) {
+	int i=0;
+	int nprotect=0;
+	bcf1_t *ctx;
+	SEXP ext;
+	PROTECT(sexpheader);nprotect++;
+	PROTECT(sexpctx);nprotect++;
+	PROTECT(sexpatt);nprotect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	ASSERT_NOT_NULL(ctx);
+	bcf_hdr_t* hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
+	ASSERT_NOT_NULL(hdr);
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(att);
+	char** dst=NULL;
+	int ndst=0;
+	bcf_unpack(ctx,BCF_UN_INFO);
+	LOG("ici");
+	int ret=bcf_get_info_string(hdr,ctx,att,(void**)&dst,&ndst);
+	LOG("ici2");
+	if(ret<0 || dst==NULL) {
+		ext = R_NilValue;
+		}
+	else
+		{
+		ext = PROTECT(allocVector(STRSXP,ndst));nprotect++;
+		for(i=0;i< ndst;++i) {
+			ASSERT_NOT_NULL(dst[i]);
+			SET_STRING_ELT(ext, i , mkChar(dst[i]));
+			}
+		}
+	//free(dst);
+	UNPROTECT(nprotect);
+	return ext;
+	}

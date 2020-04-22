@@ -31,7 +31,13 @@ export(variant.filters)
 export(variant.types)
 export(variant.is.snp)
 export(variant.max.ploidy)
-
-
-
+export(variant.gt.alleles.idx0)
+export(variant.gt.ploidy)
+export(variant.gt.homref)
+export(variant.gt.het)
+export(variant.gt.homvar)
+export(variant.gt.hetnonref)
+export(variant.gt.nocall )
+export(variant.gt.phased )
+export(variant.string.attribute)
 

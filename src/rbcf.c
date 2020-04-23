@@ -48,29 +48,23 @@ THE SOFTWARE.
  */ 
 typedef struct rbcffile_t
 	{
-
 	htsFile *fp;
-	char* filename;
 	tbx_t *tbx;
 	hts_idx_t *idx;
 	hts_itr_t *itr;
 	bcf1_t* tmp_ctx; // tmp variant ctx for reading
 	kstring_t tmp_line; // for reading line
-
-	/* header */
-	bcf_hdr_t *hdr;
+	int query_failed;
 	}RBcfFile,*RBcfFilePtr;
 
 static void RBcfFileFree(final RBcfFilePtr ptr) {
 	if (ptr==NULL) return;
 
-	free(ptr->filename);
-    free(ptr->tmp_line.s);
+	free(ptr->tmp_line.s);
 	if ( ptr->tmp_ctx) bcf_destroy1(ptr->tmp_ctx);
 	if ( ptr->itr ) hts_itr_destroy(ptr->itr);
 	if ( ptr->tbx ) tbx_destroy(ptr->tbx);
     if ( ptr->idx ) hts_idx_destroy(ptr->idx);
-	if ( ptr->hdr ) bcf_hdr_destroy(ptr->hdr);
 	if ( ptr->fp ) hts_close(ptr->fp);	
 	Free(ptr);
 	}
@@ -78,27 +72,37 @@ static void RBcfFileFree(final RBcfFilePtr ptr) {
 /**
  * Close resources associated 
  */
-SEXP RBcfFileClose(SEXP handle) {	
-	void *p = R_ExternalPtrAddr(handle);
-	RBcfFileFree((RBcfFilePtr)p);
-	R_ClearExternalPtr(handle);
-	return ScalarLogical(1);
+SEXP RBcfFileClose(SEXP sexpFile) {
+	PROTECT(sexpFile);
+	SEXP fp = VECTOR_ELT(sexpFile,0);
+	RBcfFilePtr p = (RBcfFilePtr)R_ExternalPtrAddr(fp);
+	RBcfFileFree(p);
+	R_ClearExternalPtr(fp);
+	SEXP ext= ScalarLogical(1);
+	UNPROTECT(1);
+	return ext;
 	}
 
-/**
- * destructor
- * 
- */
+void RBcfHeaderFinalizer(SEXP handler) {
+	void* p=R_ExternalPtrAddr(handler);
+	if(p==NULL) return;
+	bcf_hdr_destroy((bcf_hdr_t*)p);
+	}
+
 static void RBcfFileFinalizer(SEXP handle)
 	{
-	RBcfFileClose(handle);
+	RBcfFilePtr p = (RBcfFilePtr)R_ExternalPtrAddr(handle);
+	RBcfFileFree(p);
 	}
+
+
 
 
 /**
  * Open BCF file
  */
 SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx) {
+	bcf_hdr_t* hdr = NULL;
 	RBcfFilePtr handler =  NULL;
 	int nprotect=0;
 	PROTECT(Rfilename);nprotect++;
@@ -115,15 +119,10 @@ SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx) {
 		BCF_WARNING("Out of memory");
 		goto die;
 		}
+	handler->query_failed = 0;
 	
 	handler->tmp_ctx = bcf_init1();
 	if(handler->tmp_ctx ==NULL) {
-		BCF_WARNING("Out of memory");
-		goto die;
-		}
-	
-	handler->filename = strdup(filename);
-	if(handler->filename==NULL) {
 		BCF_WARNING("Out of memory");
 		goto die;
 		}
@@ -167,16 +166,22 @@ SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx) {
 	    }// end switch
 	 }//end if index required
 
-	handler->hdr =	bcf_hdr_read(handler->fp);
-	if(handler->hdr==NULL) {
+	hdr =	bcf_hdr_read(handler->fp);
+	if(hdr==NULL) {
 		LOG("Cannot read header from %s.",filename);
 		goto die;
 		}
 
-	/* wrap pointer in SEXP */
-	SEXP ext = PROTECT(R_MakeExternalPtr(handler, R_NilValue, R_NilValue));nprotect++;
-	/* register destructor */
-	R_RegisterCFinalizerEx(ext,RBcfFileFinalizer, TRUE);
+	SEXP sexpheader = PROTECT(R_MakeExternalPtr(hdr, R_NilValue, R_NilValue));nprotect++;
+	R_RegisterCFinalizerEx(sexpheader,RBcfHeaderFinalizer, TRUE);
+
+	SEXP sexpFile = PROTECT(R_MakeExternalPtr(handler, R_NilValue, R_NilValue));nprotect++;
+	R_RegisterCFinalizerEx(sexpFile,RBcfFileFinalizer, TRUE);
+	
+	SEXP ext = PROTECT(allocVector(VECSXP, 3));nprotect++;
+	SET_VECTOR_ELT(ext, 0, sexpFile);
+	SET_VECTOR_ELT(ext, 1, sexpheader);
+	SET_VECTOR_ELT(ext, 2, Rfilename);
     UNPROTECT(nprotect);
 	return ext;
 	
@@ -185,15 +190,12 @@ SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx) {
 		if(handler!=NULL) {
 			RBcfFileFree(handler);
 			}
+		if(hdr!=NULL) bcf_hdr_destroy(hdr);
 	UNPROTECT(nprotect);
 	return R_NilValue;
 	}
 
-void RBcfHeaderFinalizer(SEXP handler) {
-	void* p=R_ExternalPtrAddr(handler);
-	if(p==NULL) return;
-	bcf_hdr_destroy((bcf_hdr_t*)p);
-	}
+
 
 
 SEXP RBcfSeqNames(SEXP sexpFile) {
@@ -201,19 +203,23 @@ SEXP RBcfSeqNames(SEXP sexpFile) {
 	SEXP ext;
 	int nprotect=0;
 	PROTECT(sexpFile);nprotect++;
-	RBcfFilePtr p=(RBcfFilePtr)R_ExternalPtrAddr(sexpFile);
+	
+	RBcfFilePtr p = (RBcfFilePtr)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,0));
 	ASSERT_NOT_NULL(p);
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
+	ASSERT_NOT_NULL(hdr);
+	
 	const char **names;
 	
 	if(p->tbx) {
 		names =  tbx_seqnames(p->tbx, &n);
 		}
 	else if( p->idx) {
-		names = bcf_hdr_seqnames(p->hdr, &n);
+		names = bcf_hdr_seqnames(hdr, &n);
 		}
 	else
 		{
-		BCF_WARNING("VCF File \"%s\" is not indexed.",p->filename);
+		BCF_WARNING("VCF File \"%s\" is not indexed.",CHAR(asChar(VECTOR_ELT(sexpFile,2))));
 		names = NULL;
 		}
 	if(names) {
@@ -230,53 +236,43 @@ SEXP RBcfSeqNames(SEXP sexpFile) {
 	UNPROTECT(nprotect);
 	return ext;
 	}
-	
-SEXP RBcfHeader(SEXP handler) {
-	void *p = NULL;
-	PROTECT(handler);
-	p=R_ExternalPtrAddr(handler);
-	if(p==NULL) BCF_ERROR("Null object");
-	bcf_hdr_t *hdr = ((RBcfFilePtr)p)->hdr;
-	if(hdr==NULL) BCF_ERROR("Cannot get header");
-	hdr = bcf_hdr_dup(hdr);
-	if(hdr==NULL) BCF_ERROR("Cannot dup header");
-	SEXP ext = PROTECT(R_MakeExternalPtr(hdr, R_NilValue, R_NilValue));
-	R_RegisterCFinalizerEx(ext,RBcfHeaderFinalizer, TRUE);
-	UNPROTECT(2);
-	return ext;
-	}
 
-SEXP RBcfNSamples(SEXP sexpHeader) {
+SEXP RBcfNSamples(SEXP sexpFile) {
 	int n=0;
-	PROTECT(sexpHeader);
-	bcf_hdr_t* hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpHeader);
-	ASSERT_NOT_NULL(hdr);
+	PROTECT(sexpFile);
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
+	ASSERT_NOT_NULL(hdr);	
 	n = (int)bcf_hdr_nsamples(hdr);
 	UNPROTECT(1);
 	return ScalarInteger(n);
 	}
 
-SEXP RBcfSamples(SEXP handler) {
+SEXP RBcfSamples(SEXP sexpFile) {
 	int i;
-	PROTECT(handler);
-	bcf_hdr_t *hdr = (bcf_hdr_t*)R_ExternalPtrAddr(handler);
+	int nprotect=0;
+	PROTECT(sexpFile);nprotect++;
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
 	ASSERT_NOT_NULL(hdr);
-	SEXP sNames = PROTECT(allocVector(STRSXP,bcf_hdr_nsamples(hdr)));
+	
+	SEXP sNames = PROTECT(allocVector(STRSXP,bcf_hdr_nsamples(hdr)));nprotect++;
 	for(i=0;i< bcf_hdr_nsamples(hdr);++i) {
 		SET_STRING_ELT(sNames, i , mkChar(hdr->samples[i]));
 		}
-	UNPROTECT(2);
+	UNPROTECT(nprotect);
 	return sNames;
 	}
 
-SEXP RBcfSampleAtIndex0(SEXP handler,SEXP sexpIndex) {
+SEXP RBcfSampleAtIndex0(SEXP sexpFile,SEXP sexpIndex) {
 	int nprotect=0;
 	SEXP ext;
-	PROTECT(handler);++nprotect;
-	PROTECT(sexpIndex);++nprotect;
-	bcf_hdr_t *hdr = (bcf_hdr_t*)R_ExternalPtrAddr(handler);
+	PROTECT(sexpFile);nprotect++;
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
 	ASSERT_NOT_NULL(hdr);
+	
+	PROTECT(sexpIndex);++nprotect;
+	
 	int idx = asInteger(sexpIndex);
+	
 	if(idx<0 || idx >= bcf_hdr_nsamples(hdr)) {
 		BCF_WARNING("sample idx out of range %d/%d\n",bcf_hdr_nsamples(hdr));
 		ext = R_NilValue;
@@ -289,12 +285,13 @@ SEXP RBcfSampleAtIndex0(SEXP handler,SEXP sexpIndex) {
 	return ext;
 	}
 
-SEXP RBcfHeaderDict(SEXP sexpHeader) {
+SEXP RBcfHeaderDict(SEXP sexpFile) {
 	int i,nprotect=0;
 	SEXP res,vChrom,vSize,vRowNames;
-	PROTECT(sexpHeader);++nprotect;
-	bcf_hdr_t *hdr = (bcf_hdr_t*)R_ExternalPtrAddr(sexpHeader);
+	PROTECT(sexpFile);nprotect++;
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
 	ASSERT_NOT_NULL(hdr);
+	
 	int dict_size=  hdr->n[BCF_DT_CTG];
 	PROTECT(res = Rf_allocVector(VECSXP,2));nprotect++;
 	PROTECT(vChrom = Rf_allocVector(STRSXP,dict_size)); nprotect++;
@@ -339,29 +336,36 @@ SEXP RBcfQueryRegion(SEXP sexpFile,SEXP sexpInterval) {
 	SEXP ext;
 	PROTECT(sexpFile);nprotect++;
 	PROTECT(sexpInterval);nprotect++;
-	RBcfFilePtr ptr=(RBcfFilePtr)R_ExternalPtrAddr(sexpFile);
-	ASSERT_NOT_NULL(ptr);
 	
+	RBcfFilePtr ptr=(RBcfFilePtr)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,0));
+	ASSERT_NOT_NULL(ptr);
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
+	ASSERT_NOT_NULL(hdr);
+	const char* filename  = CHAR(asChar(VECTOR_ELT(sexpFile,2)));
 	
 	const char* interval= CHAR(asChar(sexpInterval));
+	
+	
 	ASSERT_NOT_NULL(interval);
 	if(ptr->itr) hts_itr_destroy(ptr->itr);
 	ptr->itr = NULL;
+	ptr->query_failed=0;
 	
 	if( ptr->tbx!=NULL) {
 		ptr->itr = tbx_itr_querys(ptr->tbx,interval);
 		}
 	else if(ptr->idx!=NULL) {
-		ptr->itr = bcf_itr_querys(ptr->idx,ptr->hdr,interval);
+		ptr->itr = bcf_itr_querys(ptr->idx,hdr,interval);
 		}
 	else
 		{
-		BCF_ERROR("Cannot query vcf file \"%s\" (no index available)",ptr->filename);
+		BCF_ERROR("Cannot query vcf file \"%s\" (no index available)",filename);
 		}
 	if(ptr->itr==NULL) {
-		BCF_WARNING("Query failed \"%s\" for \"%s\".",interval, ptr->filename);
+		BCF_WARNING("Query failed \"%s\" for \"%s\".",interval, filename);
+		ptr->query_failed = 1;
 		}
-	ext = ScalarLogical( ptr->itr!=NULL );
+	ext = ScalarLogical( ptr->query_failed==0 );
 	UNPROTECT(nprotect);
 	return ext;
 	}
@@ -371,18 +375,24 @@ static void RBcf1Finalizer(SEXP handler) {
 	bcf1_t* p=(bcf1_t*)R_ExternalPtrAddr(handler);
 	if(p) bcf_destroy(p);
 	}
-	
 
-SEXP RBcfNextLine(SEXP handler) {
+
+SEXP RBcfNextLine(SEXP sexpFile) {
 	int ret=0;
 	int nprotect=0;
-	SEXP ext;
-	PROTECT(handler);nprotect++;
-	RBcfFilePtr reader=(RBcfFilePtr)R_ExternalPtrAddr(handler);
 	bcf1_t *line = NULL;
-	ASSERT_NOT_NULL(reader);
 	
-	if ( reader->fp->format.format==vcf ) {
+	SEXP ext;
+	PROTECT(sexpFile);nprotect++;
+	RBcfFilePtr reader=(RBcfFilePtr)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,0));
+	ASSERT_NOT_NULL(reader);
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
+	ASSERT_NOT_NULL(hdr);
+	
+	if( reader->query_failed!=0) {
+		line=NULL;
+		}
+	else if ( reader->fp->format.format==vcf ) {
   		if( reader->itr) {
   			//LOG("using tbx_itr_next");
   			ret= tbx_itr_next(reader->fp, reader->tbx, reader->itr, &(reader->tmp_line));
@@ -398,9 +408,9 @@ SEXP RBcfNextLine(SEXP handler) {
         else
         	{
         	ASSERT_NOT_NULL(reader->tmp_line.s);
-        	ASSERT_NOT_NULL(reader->hdr);
+        	ASSERT_NOT_NULL(hdr);
         	ASSERT_NOT_NULL(reader->tmp_ctx);
-            ret = vcf_parse1(&(reader->tmp_line), reader->hdr, reader->tmp_ctx);
+            ret = vcf_parse1(&(reader->tmp_line), hdr, reader->tmp_ctx);
             if ( ret<0 ) BCF_ERROR("error while reading vcf line \"%s\" (error=%d)",reader->tmp_line.s,ret);
             line = reader->tmp_ctx;
             }
@@ -411,7 +421,7 @@ SEXP RBcfNextLine(SEXP handler) {
         	}
         else
         	{
-        	ret = bcf_read1(reader->fp, reader->hdr, reader->tmp_ctx);
+        	ret = bcf_read1(reader->fp,hdr, reader->tmp_ctx);
         	}
         if ( ret < -1 ) {
         	BCF_ERROR("error while reading bcf line");
@@ -429,10 +439,14 @@ SEXP RBcfNextLine(SEXP handler) {
 	 	line = bcf_dup(line);
 	 	ASSERT_NOT_NULL(line);
 	 	
-	 	ext = PROTECT(R_MakeExternalPtr(line, R_NilValue, R_NilValue));nprotect++;
-	 	R_RegisterCFinalizerEx(ext,RBcf1Finalizer, TRUE);
+	 	SEXP sexpctx = PROTECT(R_MakeExternalPtr(line, R_NilValue, R_NilValue));nprotect++;
+	 	R_RegisterCFinalizerEx(sexpctx,RBcf1Finalizer, TRUE);
+	 	
+	 	ext = PROTECT(allocVector(VECSXP, 2));nprotect++;
+		SET_VECTOR_ELT(ext, 0, VECTOR_ELT(sexpFile,1));
+		SET_VECTOR_ELT(ext, 1, sexpctx);
 	 	}
-	 else
+	else
 		 {
 		 ext = R_NilValue;		 
 		 }
@@ -441,12 +455,12 @@ SEXP RBcfNextLine(SEXP handler) {
 	return ext;
 	}
 
-SEXP RBcfCtxRid(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxRid(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx=(bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	ext = ScalarInteger(ctx->rid);
 	UNPROTECT(nprotect);
@@ -454,52 +468,49 @@ SEXP RBcfCtxRid(SEXP sexpheader,SEXP sexpctx) {
 	}
 
 
-SEXP RBcfCtxSeqName(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxSeqName(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx = NULL;
 	bcf_hdr_t* hdr = NULL;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	PROTECT(sexpheader);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
-	ASSERT_NOT_NULL(ctx);
-	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
-	ASSERT_NOT_NULL(ctx);
+	PROTECT(sexpCtx);nprotect++;
+	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ext = mkString(bcf_seqname(hdr,ctx));
 	UNPROTECT(nprotect);
 	return ext;
 	}
 
-SEXP RBcfCtxPos(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxPos(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	ext = ScalarInteger(ctx->pos + 1);
 	UNPROTECT(nprotect);
 	return ext;
 	}
 
-SEXP RBcfCtxHasId(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxHasId(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx = NULL;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	ext = ScalarLogical(ctx->d.id!=NULL);
 	UNPROTECT(nprotect);
 	return ext;
 	}
 
-SEXP RBcfCtxId(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxId(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx = NULL;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	if(ctx->d.id) {
 		ext = mkString(ctx->d.id);
@@ -513,24 +524,24 @@ SEXP RBcfCtxId(SEXP sexpheader,SEXP sexpctx) {
 	}
 
 
-SEXP RBcfCtxEnd(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxEnd(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	ext = ScalarInteger(ctx->pos /* 0 based */ + ctx->rlen);
 	UNPROTECT(nprotect);
 	return ext;
 	}
 
-SEXP RBcfCtxNAlleles(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxNAlleles(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	ext = ScalarInteger(ctx->n_allele);
 	UNPROTECT(nprotect);
@@ -538,12 +549,12 @@ SEXP RBcfCtxNAlleles(SEXP sexpheader,SEXP sexpctx) {
 	}
 
 
-SEXP RBcfCtxAlleles(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxAlleles(SEXP sexpCtx) {
 	int i=0;
 	int nprotect=0;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	bcf1_t * ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	bcf_unpack(ctx,BCF_UN_STR);
 	ext = PROTECT(allocVector(STRSXP,ctx->n_allele));nprotect++;
@@ -556,14 +567,14 @@ SEXP RBcfCtxAlleles(SEXP sexpheader,SEXP sexpctx) {
 	return ext;
 	}
 
-SEXP RBcfCtxReference(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxReference(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
-	ASSERT_NOT_NULL(ctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	bcf_unpack(ctx,BCF_UN_STR);
+	ASSERT_NOT_NULL(ctx);
 	if(ctx->n_allele>0) {
 		ext = mkString(ctx->d.allele[0]);
 		}
@@ -575,15 +586,16 @@ SEXP RBcfCtxReference(SEXP sexpheader,SEXP sexpctx) {
 	return ext;
 	}
 
-SEXP RBcfCtxAlternateAlleles(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxAlternateAlleles(SEXP sexpCtx) {
 	int nprotect=0;
 	int i;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
-	bcf_unpack(ctx,BCF_UN_STR);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
+	bcf_unpack(ctx,BCF_UN_STR);
+	
 	ext = PROTECT(allocVector(STRSXP,(ctx->n_allele<1?0:ctx->n_allele-1)));nprotect++;
 	for(i=1;i< ctx->n_allele;++i) {
 		SET_STRING_ELT(ext, i-1, mkChar(ctx->d.allele[i]));
@@ -592,24 +604,24 @@ SEXP RBcfCtxAlternateAlleles(SEXP sexpheader,SEXP sexpctx) {
 	return ext;
 	}
 	
-SEXP RBcfCtxHasQual(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxHasQual(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	ext = ScalarLogical(!bcf_float_is_missing(ctx->qual));
 	UNPROTECT(nprotect);
 	return ext;
 	}
 
-SEXP RBcfCtxQual(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxQual(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	if(bcf_float_is_missing(ctx->qual)) {
 		ext = R_NilValue;
@@ -623,36 +635,35 @@ SEXP RBcfCtxQual(SEXP sexpheader,SEXP sexpctx) {
 	}
 
 
-SEXP RBcfCtxFiltered(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxFiltered(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	bcf_hdr_t* hdr;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	PROTECT(sexpheader);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
-	bcf_unpack(ctx,BCF_UN_FLT);
-	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
+	bcf_unpack(ctx,BCF_UN_FLT);
 	ext = ScalarLogical(!bcf_has_filter(hdr,ctx,"PASS"));
 	UNPROTECT(nprotect);
 	return ext;
 	}
 
-SEXP RBcfCtxFilters(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxFilters(SEXP sexpCtx) {
 	int nprotect=0;
 	int i=0;
 	bcf1_t *ctx;
 	bcf_hdr_t* hdr;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	PROTECT(sexpheader);nprotect++;
+	PROTECT(sexpCtx);nprotect++;
 	
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
-	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
+	
 	bcf_unpack(ctx,BCF_UN_FLT);
 	
 	if(bcf_has_filter(hdr,ctx,"PASS")) {
@@ -669,45 +680,42 @@ SEXP RBcfCtxFilters(SEXP sexpheader,SEXP sexpctx) {
 	return ext;
 	}
 
-SEXP RBcfCtxVariantTypes(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxVariantTypes(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
-	ASSERT_NOT_NULL(ctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ext = ScalarInteger(bcf_get_variant_types(ctx));
 	UNPROTECT(nprotect);
 	return ext;
 	}
 	
-SEXP RBcfCtxVariantIsSnp(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxVariantIsSnp(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	ext = ScalarLogical(bcf_is_snp(ctx));
 	UNPROTECT(nprotect);
 	return ext;
 	}
 
-SEXP RBcfCtxVariantMaxPloidy(SEXP sexpheader,SEXP sexpctx) {
+SEXP RBcfCtxVariantMaxPloidy(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
 	bcf_hdr_t* hdr;
 	int32_t *gt_arr = NULL, ngt_arr = 0;
 	SEXP ext;
-	PROTECT(sexpctx);nprotect++;
-	PROTECT(sexpheader);nprotect++;
-	
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+
+	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
 	bcf_unpack(ctx,BCF_UN_IND);
-	
-	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
-	ASSERT_NOT_NULL(hdr);
+
 	
 	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
 	if ( ngt<=0 ) {
@@ -722,6 +730,8 @@ SEXP RBcfCtxVariantMaxPloidy(SEXP sexpheader,SEXP sexpctx) {
 	return ext;
 	}
 
+
+
 struct GenotypeShuttle {
 	int phased;
 	int nocall;
@@ -732,37 +742,26 @@ struct GenotypeShuttle {
 	};
 
 
-
-static void scanGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,struct GenotypeShuttle* shuttle) {
+SEXP VariantGetGenotype(SEXP sexpCtx,SEXP sexpgtidx) {
 	int nprotect=0;
-	bcf1_t *ctx;
-	bcf_hdr_t* hdr;
-	int sample_idx = 0;
-	int32_t *gt_arr = NULL, ngt_arr = 0;
-
-	PROTECT(sexpctx);nprotect++;
-	PROTECT(sexpheader);nprotect++;
-	PROTECT(sexpgtidx);nprotect++;
+	SEXP ext;
+	PROTECT(sexpCtx);nprotect++;
 	
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
-	ASSERT_NOT_NULL(ctx);
-	bcf_unpack(ctx,BCF_UN_IND);
-	
-	hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
-	ASSERT_NOT_NULL(hdr);
+	bcf_hdr_t* hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	int sample_idx = -1;
 	
 	if(IS_CHARACTER(sexpgtidx))
 		{
 		const char* sn = CHAR(asChar(sexpgtidx));
 		if(sn==NULL) {
-			shuttle->error_flag  = 1;
-			return;
+			UNPROTECT(nprotect);
+			return R_NilValue;
 			}
 		sample_idx = bcf_hdr_id2int(hdr,BCF_DT_SAMPLE,sn);
 		if(sample_idx<0) {
 			BCF_WARNING("unknown sample %s",sn);
-			shuttle->error_flag  = 1;
-			return;
+			UNPROTECT(nprotect);
+			return R_NilValue;
 			}
         }
 	else
@@ -772,9 +771,25 @@ static void scanGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,struct Geno
 	
 	if(sample_idx<0 || sample_idx>=bcf_hdr_nsamples(hdr)) {
 		BCF_WARNING("bad sample index 0<=%d<%d",sample_idx,bcf_hdr_nsamples(hdr));
-		shuttle->error_flag  = 1;
-		return;
+		ext= R_NilValue;
 		}
+	else
+		{
+		ext = PROTECT(allocVector(VECSXP, 3));nprotect++;
+		SET_VECTOR_ELT(ext, 0, VECTOR_ELT(sexpCtx,0));//hdr
+		SET_VECTOR_ELT(ext, 1, VECTOR_ELT(sexpCtx,1));//variant
+		SET_VECTOR_ELT(ext, 2, ScalarInteger(sample_idx));
+		}
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+static void scanGenotype(bcf_hdr_t* hdr,bcf1_t *ctx,int sample_idx, struct GenotypeShuttle* shuttle) {
+	int32_t *gt_arr = NULL, ngt_arr = 0;
+
+	bcf_unpack(ctx,BCF_UN_IND);
+	
+	
 	int j;
 	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
 	int nsmpl = bcf_hdr_nsamples(hdr);
@@ -816,17 +831,23 @@ static void scanGenotype(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx,struct Geno
   			shuttle->allele_count++;
   		    }
 	
-	UNPROTECT(nprotect);
 	}
 
-SEXP RBcfCtxVariantGtAllelesIndexes0(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx) {
+SEXP RBcfCtxVariantGtAllelesIndexes0(SEXP sexpGt) {
 	int nprotect=0;
 	struct GenotypeShuttle shuttle;
 	SEXP ext;
+	PROTECT(sexpGt);nprotect++;
+	
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+	int sample_index = asInteger(VECTOR_ELT(sexpGt,2));
+	
+
 	memset((void*)&shuttle,0,sizeof(struct GenotypeShuttle));
 	shuttle.allele_capacity=10;
 	shuttle.alleles =Calloc(shuttle.allele_capacity,int);
-	scanGenotype(sexpheader,sexpctx,sexpgtidx,&shuttle);
+	scanGenotype(hdr,ctx,sample_index,&shuttle);
 	if(shuttle.error_flag)
 		{
 		ext = R_NilValue;
@@ -843,24 +864,31 @@ SEXP RBcfCtxVariantGtAllelesIndexes0(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx
 	return ext;
 	}
 
-SEXP RBcfCtxVariantGtPhased(SEXP sexpheader,SEXP sexpctx,SEXP sexpgtidx) {
+SEXP RBcfCtxVariantGtPhased(SEXP sexpGt) {
+	int nprotect=0;
+	
 	struct GenotypeShuttle shuttle;
+	PROTECT(sexpGt);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+	int sample_index = asInteger(VECTOR_ELT(sexpGt,2));
+	
 	memset((void*)&shuttle,0,sizeof(struct GenotypeShuttle));
-	scanGenotype(sexpheader,sexpctx,sexpgtidx,&shuttle);
+	scanGenotype(hdr,ctx,sample_index,&shuttle);
+	UNPROTECT(nprotect);
 	return ScalarLogical(shuttle.phased==1);
 	}
 	
-SEXP RBcfCtxVariantAttributeAsString(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) {
+SEXP RBcfCtxVariantAttributeAsString(SEXP sexpCtx,SEXP sexpatt) {
 	int nprotect=0;
-	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpheader);nprotect++;
-	PROTECT(sexpctx);nprotect++;
-	PROTECT(sexpatt);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	
 	ASSERT_NOT_NULL(ctx);
-	bcf_hdr_t* hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
+
 	const char* att = CHAR(asChar(sexpatt));
 	ASSERT_NOT_NULL(att);
 	char* dst=NULL;
@@ -879,17 +907,16 @@ SEXP RBcfCtxVariantAttributeAsString(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) 
 	return ext;
 	}
 
-SEXP RBcfCtxVariantAttributeAsInt32(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) {
+SEXP RBcfCtxVariantAttributeAsInt32(SEXP sexpCtx,SEXP sexpatt) {
 	int nprotect=0;
-	bcf1_t *ctx;
 	SEXP ext;
-	PROTECT(sexpheader);nprotect++;
-	PROTECT(sexpctx);nprotect++;
-	PROTECT(sexpatt);nprotect++;
-	ctx=(bcf1_t*)R_ExternalPtrAddr(sexpctx);
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	
 	ASSERT_NOT_NULL(ctx);
-	bcf_hdr_t* hdr=(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
 	ASSERT_NOT_NULL(hdr);
+
 	const char* att = CHAR(asChar(sexpatt));
 	ASSERT_NOT_NULL(att);
 	int32_t* dst=NULL;
@@ -897,7 +924,7 @@ SEXP RBcfCtxVariantAttributeAsInt32(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) {
 	bcf_unpack(ctx,BCF_UN_INFO);
 	int ret=bcf_get_info_int32(hdr,ctx,att,(void**)&dst,&ndst);
 	if(ret<0 || dst==NULL ) {
-		ext = R_NilValue;
+		PROTECT(ext = Rf_allocVector(INTSXP,0)); nprotect++;
 		}
 	else
 		{
@@ -911,3 +938,37 @@ SEXP RBcfCtxVariantAttributeAsInt32(SEXP sexpheader,SEXP sexpctx,SEXP sexpatt) {
 	UNPROTECT(nprotect);
 	return ext;
 	}
+
+
+SEXP RBcfCtxVariantAttributeAsFloat(SEXP sexpCtx,SEXP sexpatt) {
+	int nprotect=0;
+	SEXP ext;
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(att);
+	float_t* dst=NULL;
+	int ndst=0;
+	bcf_unpack(ctx,BCF_UN_INFO);
+	int ret=bcf_get_info_float(hdr,ctx,att,(void**)&dst,&ndst);
+	if(ret<0 || dst==NULL ) {
+		PROTECT(ext = Rf_allocVector(REALSXP,0)); nprotect++;
+		}
+	else
+		{
+		PROTECT(ext = Rf_allocVector(REALSXP,ndst)); nprotect++;
+                for(int i=0;i< ndst;i++) {
+                       	REAL(ext)[i] = dst[i];
+                        }
+		
+		}
+	free(dst);
+	UNPROTECT(nprotect);
+	return ext;
+	}
+

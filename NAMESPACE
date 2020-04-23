@@ -39,7 +39,13 @@ export(genotype.homvar)
 export(genotype.hetnonref)
 export(genotype.nocall )
 export(genotype.phased )
-export(variant.string.attributes)
-export(variant.int.attributes)
-export(variant.float.attributes)
+export(variant.attribute)
+export(variant.has.attribute)
+export(bcf.filters)
+export(bcf.infos)
+export(bcf.formats)
+export(variant.info.ids)
+export(variant.format.ids)
+
+
 

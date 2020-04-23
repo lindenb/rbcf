@@ -383,34 +383,66 @@ genotype.phased  <-function(gt) {
 	.Call("RBcfCtxVariantGtPhased",gt);
 	}
 
+#' @param vc the variant
+#' @param att the INFO/Attribute
+#' @return true if variant has INFO attribute
+variant.has.attribute <-function(vc,att) {
+	stopifnot(is.character(att))
+	.Call("VariantHasAttribute",vc,att)
+	}
 
 
 #' @param vc the variant
 #' @param att the INFO/Attribute
-#' @return the the INFO attribute for the given key
-variant.string.attributes <-function(vc,att) {
+#' @param splitString split strings using commas
+#' @return the the INFO attribute for the given key. The output is a vector (empty if the attribute was not found) or a Boolean if the attribute is a Type=Flag
+variant.attribute <-function(vc,att, splitString = TRUE) {
 	stopifnot(is.character(att))
-	s <- .Call("RBcfCtxVariantAttributeAsString",vc,att)
-	if( is.null(s) || length(s)==0) {
+	s <-.Call("VariantGetAttribute",vc,att)
+	if(is.null(s)) {
 		c()
+	} else if (is.logical(s)) {
+		s
+	} else if(is.character(s)) {
+		if( is.null(s) || length(s)==0 ) {
+			c()
+		} else if(!splitString) {
+			c(s)
+		} else {
+			 unlist(strsplit(s, split=","))
+		}
 	} else {
-	     unlist(strsplit(s, split=","))
-	     }
+		s
+		}
 	}
 
+#' @param fp the vcf reader
+#' @return a table of filters
+bcf.filters <-function(fp) {
+	 .Call("BcfFilterTable",fp)
+}
+
+#' @param fp the vcf reader
+#' @return a table of filters
+bcf.infos <-function(fp) {
+	 .Call("BcfInfoTable",fp)
+}
+
+#' @param fp the vcf reader
+#' @return a table of filters
+bcf.formats <-function(fp) {
+	 .Call("BcfFormatTable",fp)
+}
 
 #' @param vc the variant
-#' @param att the INFO/Attribute
-#' @return the the INFO attribute for the given key
-variant.int.attributes <-function(vc,att) {
-	stopifnot(is.character(att))
-	.Call("RBcfCtxVariantAttributeAsInt32",vc,att)
+#' @return the list INFOs for this variant
+variant.info.ids <-function(vc) {
+	s <-.Call("VariantGetInfoKeySet",vc)
 	}
 
 #' @param vc the variant
-#' @param att the INFO/Attribute
-#' @return the the INFO attribute for the given key
-variant.float.attributes <-function(vc,att) {
-	stopifnot(is.character(att))
-	.Call("RBcfCtxVariantAttributeAsFloat",vc,att)
+#' @return the list FORMATs for this variant
+variant.format.ids <-function(vc) {
+	s <-.Call("VariantGetFormatKeySet",vc)
 	}
+	

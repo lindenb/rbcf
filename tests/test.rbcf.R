@@ -48,14 +48,27 @@ test01<-function(filename,requireIndex) {
 		cat(" ploidy:",file=stderr())
 		cat(variant.max.ploidy(vc),file=stderr())
 		cat(" att.str:[",file=stderr())
-		cat(variant.string.attributes(vc,"CSQ"),file=stderr())
+		cat(variant.attribute(vc,"CSQ"),file=stderr())
 		cat("] ",file=stderr())
+		cat(" att.has.attr:",file=stderr())
+		cat(variant.has.attribute(vc,"DP"),file=stderr())
+		cat(" ",file=stderr())
 		cat(" att.str:[",file=stderr())
-		cat(variant.int.attributes(vc,"DP"),file=stderr())
+		cat(variant.attribute(vc,"DP"),file=stderr())
 		cat("] ",file=stderr())
-		cat(" att.str:[",file=stderr())
-		cat(variant.float.attributes(vc,"AF"),file=stderr())
+		cat(" att.str.float:[",file=stderr())
+		cat(variant.attribute(vc,"AF"),file=stderr())
 		cat("] ",file=stderr())
+		cat(" att.str.flag:[",file=stderr())
+		cat(variant.attribute(vc,"X1"),file=stderr())
+		cat("] ",file=stderr())
+		cat("] info.ids:[",file=stderr())
+		cat(variant.info.ids(vc),file=stderr())
+		cat("] info.formats:[",file=stderr())
+		cat(variant.format.ids(vc),file=stderr())
+		cat("] ",file=stderr())
+		
+		
 		
 		cat("\n",file=stderr())
 		snidx<-1
@@ -86,10 +99,18 @@ test01<-function(filename,requireIndex) {
 	bcf.close(fp)
 	}
 
+
+
 test01("data/gnomad.exomes.r2.0.1.sites.vcf",FALSE)
 test01("data/rotavirus_rf.01.vcf",FALSE)
 test01("data/rotavirus_rf.02.vcf.gz",TRUE)
 test01("data/rotavirus_rf.03.vcf.gz",TRUE)
 test01("data/rotavirus_rf.04.bcf",TRUE)
+
+fp <- bcf.open("data/rotavirus_rf.01.vcf",FALSE)
+bcf.filters(fp);
+bcf.infos(fp);
+bcf.formats(fp)
+bcf.close(fp);
 
 

@@ -285,6 +285,153 @@ SEXP RBcfSampleAtIndex0(SEXP sexpFile,SEXP sexpIndex) {
 	return ext;
 	}
 
+/** number of vcfheaderline with this type */
+static int my_count_hdr_type(bcf_hdr_t* hdr,int type) {
+	int count  = 0;
+	int i = 0;
+	for (i=0; i<hdr->nhrec; i++) {
+        if ( hdr->hrec[i]->type!=type ) continue;
+        count++;
+        }
+    return count;
+	}
+
+SEXP BcfFilterTable(SEXP sexpFile) {
+	int  row_idx=0,hidx=0,nprotect=0;
+	SEXP res,vID,vDesc,vRowNames;
+	PROTECT(sexpFile);nprotect++;
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
+	ASSERT_NOT_NULL(hdr);
+	
+	final int header_type = BCF_HL_FLT;
+	int nrows = my_count_hdr_type(hdr,header_type);
+	
+	PROTECT(res = Rf_allocVector(VECSXP,2));nprotect++;
+	PROTECT(vID = Rf_allocVector(STRSXP,nrows)); nprotect++;
+	PROTECT(vDesc = Rf_allocVector(STRSXP,nrows)); nprotect++;
+	PROTECT(vRowNames = Rf_allocVector(STRSXP,nrows)); nprotect++;
+	
+	for(hidx=0; hidx <hdr->nhrec; hidx++) {
+		bcf_hrec_t *hrec = hdr->hrec[hidx];
+        if ( hrec->type!= header_type ) continue;
+		/* ID */
+			{
+			int i = bcf_hrec_find_key(hrec,"ID");
+			SEXP sexpCell = mkChar(i<0?".":hrec->vals[i]);
+			SET_STRING_ELT(vID, row_idx,  sexpCell);
+			SET_STRING_ELT(vRowNames, row_idx, sexpCell );
+			}
+		/* Description */
+			{
+			int i = bcf_hrec_find_key(hrec,"Description");
+			SEXP sexpCell = mkChar(i<0?".":hrec->vals[i]);
+			SET_STRING_ELT(vDesc,row_idx,sexpCell);
+			}
+		row_idx++;
+		}
+
+	/* set the columns of the table */
+	SET_VECTOR_ELT(res, 0, vID);
+  	SET_VECTOR_ELT(res, 1, vDesc);
+
+	/* set the columns' name of the table */
+
+	SEXP sNames = PROTECT(allocVector(STRSXP, 2));nprotect++;
+	SET_STRING_ELT(sNames, 0, mkChar("ID"));
+	SET_STRING_ELT(sNames, 1, mkChar("Description"));
+	namesgets(res, sNames);
+	
+	// https://stackoverflow.com/questions/23547625
+   SEXP cls = PROTECT(allocVector(STRSXP, 1));nprotect++;
+   SET_STRING_ELT(cls, 0, mkChar("data.frame"));
+   classgets(res, cls);
+	
+	setAttrib(res, R_RowNamesSymbol, vRowNames);
+	
+	UNPROTECT(nprotect);
+	return res;
+	}
+	
+static SEXP BcfInfoOrFormatTable(SEXP sexpFile,int header_type) {
+	int  row_idx=0,hidx=0,nprotect=0;
+	SEXP res,vID,vNumber,vType,vDesc,vRowNames;
+	PROTECT(sexpFile);nprotect++;
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
+	ASSERT_NOT_NULL(hdr);
+	
+	int nrows = my_count_hdr_type(hdr,header_type);
+	
+	PROTECT(res = Rf_allocVector(VECSXP,4));nprotect++;
+	PROTECT(vID = Rf_allocVector(STRSXP,nrows)); nprotect++;
+	PROTECT(vDesc = Rf_allocVector(STRSXP,nrows)); nprotect++;
+	PROTECT(vNumber = Rf_allocVector(STRSXP,nrows)); nprotect++;
+	PROTECT(vType = Rf_allocVector(STRSXP,nrows)); nprotect++;
+	PROTECT(vRowNames = Rf_allocVector(STRSXP,nrows)); nprotect++;
+	
+	for(hidx=0; hidx <hdr->nhrec; hidx++) {
+		bcf_hrec_t *hrec = hdr->hrec[hidx];
+        if ( hrec->type!= header_type ) continue;
+		/* ID */
+			{
+			int i = bcf_hrec_find_key(hrec,"ID");
+			SEXP sexpCell = mkChar(i<0?".":hrec->vals[i]);
+			SET_STRING_ELT(vID, row_idx,  sexpCell);
+			SET_STRING_ELT(vRowNames, row_idx, sexpCell );
+			}
+		/* Number */
+			{
+			int i = bcf_hrec_find_key(hrec,"Number");
+			SEXP sexpCell = mkChar(i<0?".":hrec->vals[i]);
+			SET_STRING_ELT(vNumber, row_idx,  sexpCell);
+			}	
+		/* Type */
+			{
+			int i = bcf_hrec_find_key(hrec,"Type");
+			SEXP sexpCell = mkChar(i<0?".":hrec->vals[i]);
+			SET_STRING_ELT(vType, row_idx,  sexpCell);
+			}
+		/* Description */
+			{
+			int i = bcf_hrec_find_key(hrec,"Description");
+			SEXP sexpCell = mkChar(i<0?".":hrec->vals[i]);
+			SET_STRING_ELT(vDesc,row_idx,sexpCell);
+			}
+		row_idx++;
+		}
+
+	/* set the columns of the table */
+	SET_VECTOR_ELT(res, 0, vID);
+	SET_VECTOR_ELT(res, 1, vNumber);
+	SET_VECTOR_ELT(res, 2, vType);
+  	SET_VECTOR_ELT(res, 3, vDesc);
+
+	/* set the columns' name of the table */
+	SEXP sNames = PROTECT(allocVector(STRSXP, 4));nprotect++;
+	SET_STRING_ELT(sNames, 0, mkChar("ID"));
+	SET_STRING_ELT(sNames, 1, mkChar("Number"));
+	SET_STRING_ELT(sNames, 2, mkChar("Type"));
+	SET_STRING_ELT(sNames, 3, mkChar("Description"));
+	namesgets(res, sNames);
+	
+	// https://stackoverflow.com/questions/23547625
+   SEXP cls = PROTECT(allocVector(STRSXP, 1));nprotect++;
+   SET_STRING_ELT(cls, 0, mkChar("data.frame"));
+   classgets(res, cls);
+	
+	setAttrib(res, R_RowNamesSymbol, vRowNames);
+	
+	UNPROTECT(nprotect);
+	return res;
+	}
+
+SEXP BcfInfoTable(SEXP sexpFile) {
+	return BcfInfoOrFormatTable(sexpFile,BCF_HL_INFO);
+	}
+
+SEXP BcfFormatTable(SEXP sexpFile) {
+	return BcfInfoOrFormatTable(sexpFile,BCF_HL_FMT);
+	}
+
 SEXP RBcfHeaderDict(SEXP sexpFile) {
 	int i,nprotect=0;
 	SEXP res,vChrom,vSize,vRowNames;
@@ -878,97 +1025,326 @@ SEXP RBcfCtxVariantGtPhased(SEXP sexpGt) {
 	UNPROTECT(nprotect);
 	return ScalarLogical(shuttle.phased==1);
 	}
-	
-SEXP RBcfCtxVariantAttributeAsString(SEXP sexpCtx,SEXP sexpatt) {
+
+
+SEXP VariantHasAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	int nprotect=0;
 	SEXP ext;
 	PROTECT(sexpCtx);nprotect++;
 	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
 	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
-	
+	const char* att = CHAR(asChar(sexpatt));
 	ASSERT_NOT_NULL(ctx);
 	ASSERT_NOT_NULL(hdr);
-
-	const char* att = CHAR(asChar(sexpatt));
 	ASSERT_NOT_NULL(att);
-	char* dst=NULL;
-	int ndst=0;
-	bcf_unpack(ctx,BCF_UN_INFO);
-	int ret=bcf_get_info_string(hdr,ctx,att,(void**)&dst,&ndst);
-	if(ret<0 || dst==NULL) {
-		ext = R_NilValue;
+	int tag_id = bcf_hdr_id2int(hdr,BCF_DT_ID,att);
+	
+	if(!(bcf_hdr_idinfo_exists(hdr,BCF_HL_INFO,tag_id))) {
+		ext = ScalarLogical(0);
 		}
-	else
+	else 
 		{
-		ext = mkString(dst);
+		bcf_info_t* info = bcf_get_info_id(ctx,  tag_id);
+		ext = ScalarLogical(info!=NULL);
 		}
-	free(dst);
+	UNPROTECT(nprotect);
+	return ext;
+	}
+	
+SEXP VariantGetInfoKeySet(SEXP sexpCtx) {
+	int i,nprotect=0;
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	
+	bcf_unpack(ctx,BCF_UN_INFO);
+	int count=0;
+	for(i=0;i< ctx->n_info ;++i) {
+		bcf_info_t *z = &(ctx->d.info[i]);
+        if ( !z->vptr ) continue;
+		count++;
+		}
+	
+	
+	SEXP ext = PROTECT(allocVector(STRSXP,count));nprotect++;
+	count=0;//reset
+	for(i=0;i< ctx->n_info ;++i) {
+		bcf_info_t *z = &(ctx->d.info[i]);
+        if ( !z->vptr ) continue;
+        const char * id = hdr->id[BCF_DT_ID][z->key].key;
+		SET_STRING_ELT(ext, count , mkChar(id));
+		count++;
+		}
+	
 	UNPROTECT(nprotect);
 	return ext;
 	}
 
-SEXP RBcfCtxVariantAttributeAsInt32(SEXP sexpCtx,SEXP sexpatt) {
-	int nprotect=0;
-	SEXP ext;
+
+
+SEXP VariantGetFormatKeySet(SEXP sexpCtx) {
+	int i,nprotect=0;
 	PROTECT(sexpCtx);nprotect++;
 	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
 	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
-	
+
 	ASSERT_NOT_NULL(ctx);
 	ASSERT_NOT_NULL(hdr);
-
-	const char* att = CHAR(asChar(sexpatt));
-	ASSERT_NOT_NULL(att);
-	int32_t* dst=NULL;
-	int ndst=0;
-	bcf_unpack(ctx,BCF_UN_INFO);
-	int ret=bcf_get_info_int32(hdr,ctx,att,(void**)&dst,&ndst);
-	if(ret<0 || dst==NULL ) {
-		PROTECT(ext = Rf_allocVector(INTSXP,0)); nprotect++;
+	bcf_unpack(ctx,BCF_UN_FMT);
+	int count=0;
+	bcf_fmt_t *fmt = ctx->d.fmt;
+	for(i=0;i< ctx->n_fmt ;++i) {
+        if ( !fmt[i].p || fmt[i].id<0) continue;
+		count++;
 		}
-	else
-		{
-		PROTECT(ext = Rf_allocVector(INTSXP,ndst)); nprotect++;
-                for(int i=0;i< ndst;i++) {
-                       	INTEGER(ext)[i] = dst[i];
-                        }
+	
+	
+	SEXP ext = PROTECT(allocVector(STRSXP,count));nprotect++;
+	count=0;//reset
+	for(i=0;i< ctx->n_fmt ;++i) {
+        if ( !fmt[i].p || fmt[i].id<0 ) continue;
+        const char * id = hdr->id[BCF_DT_ID][fmt[i].id].key;
+		SET_STRING_ELT(ext, count , mkChar(id));
+		count++;
+		}
+	
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+SEXP VariantGetAttribute(SEXP sexpCtx,SEXP sexpatt) {
+	int nprotect=0;
+	
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	ASSERT_NOT_NULL(att);
+	
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+	
+
+	if(!(bcf_hdr_idinfo_exists(hdr,BCF_HL_INFO,tag_id))) {
+		SEXP ext = PROTECT(allocVector(STRSXP,0));nprotect++;
+		UNPROTECT(nprotect);
+		return ext;
+		}
+	
+	if ( !(ctx->unpacked & BCF_UN_INFO) ) bcf_unpack(ctx, BCF_UN_INFO);
+	
+	
+	uint32_t type = bcf_hdr_id2type(hdr,BCF_HL_INFO, tag_id);
+	
+	bcf_info_t* info = bcf_get_info_id(ctx,  tag_id);
+	if(info==NULL) {
+		SEXP ext = PROTECT(allocVector(STRSXP,0));nprotect++;
+		UNPROTECT(nprotect);
+		return ext;
+		}
+	switch(type) {
+		case BCF_HT_STR: {
+			SEXP ext;
+			char* dst=NULL;
+			int ndst=0;
+			int ret=bcf_get_info_string(hdr,ctx,att,(void**)&dst,&ndst);
+			if(ret<0 || dst==NULL) {
+				ext = R_NilValue;
+				}
+			else
+				{
+				ext= mkString(dst);
+				}
+			free(dst);
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
+		case BCF_HT_INT: {
+			SEXP ext;
+			int ndst=0;
+			int32_t* dst=NULL;
+			int ret=bcf_get_info_int32(hdr,ctx,att,(void**)&dst,&ndst);
+			if(ret<0 || dst==NULL ) {
+				PROTECT(ext = Rf_allocVector(INTSXP,0)); nprotect++;
+				}
+			else
+				{
+				PROTECT(ext = Rf_allocVector(INTSXP,ndst)); nprotect++;
+				        for(int i=0;i< ndst;i++) {
+				               	INTEGER(ext)[i] = dst[i];
+				                }
 		
+				}
+			free(dst);
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
+		case BCF_HT_REAL: {
+			SEXP ext;
+			int ndst=0;
+			float* dst=NULL;
+			int ret=bcf_get_info_float(hdr,ctx,att,(void**)&dst,&ndst);
+			if(ret<0 || dst==NULL ) {
+				PROTECT(ext = Rf_allocVector(REALSXP,0)); nprotect++;
+				}
+			else
+				{
+				PROTECT(ext = Rf_allocVector(REALSXP,ndst)); nprotect++;
+				        for(int i=0;i< ndst;i++) {
+				               	REAL(ext)[i] = dst[i];
+				                }
+		
+				}
+			free(dst);
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
+		case BCF_HT_FLAG: {
+			int is_set = bcf_get_info_flag(hdr,ctx,att,NULL,NULL)==1;
+			SEXP ext = ScalarLogical(is_set==1);
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
+		default:
+			{
+			BCF_WARNING("unknown INFO type");
+			SEXP ext = PROTECT(allocVector(STRSXP,0));nprotect++;
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
 		}
-	free(dst);
-	UNPROTECT(nprotect);
-	return ext;
+	return R_NilValue;
 	}
 
-
-SEXP RBcfCtxVariantAttributeAsFloat(SEXP sexpCtx,SEXP sexpatt) {
+#ifdef XXX
+SEXP GenotypeAttributes(SEXP sexpGt,SEXP sexpatt) {
 	int nprotect=0;
-	SEXP ext;
-	PROTECT(sexpCtx);nprotect++;
-	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
-	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	
+	PROTECT(sexpGt);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+	int sample_index = asInteger(VECTOR_ELT(sexpGt,2));
+	const char* att = CHAR(asChar(sexpatt));
 	ASSERT_NOT_NULL(ctx);
 	ASSERT_NOT_NULL(hdr);
-
-	const char* att = CHAR(asChar(sexpatt));
 	ASSERT_NOT_NULL(att);
-	float_t* dst=NULL;
-	int ndst=0;
-	bcf_unpack(ctx,BCF_UN_INFO);
-	int ret=bcf_get_info_float(hdr,ctx,att,(void**)&dst,&ndst);
-	if(ret<0 || dst==NULL ) {
-		PROTECT(ext = Rf_allocVector(REALSXP,0)); nprotect++;
+	
+	
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+	
+
+	if(!(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id))) {
+		SEXP ext = PROTECT(allocVector(STRSXP,0));nprotect++;
+		UNPROTECT(nprotect);
+		return ext;
 		}
-	else
-		{
-		PROTECT(ext = Rf_allocVector(REALSXP,ndst)); nprotect++;
-                for(int i=0;i< ndst;i++) {
-                       	REAL(ext)[i] = dst[i];
-                        }
+	
+	int nsmpl = bcf_hdr_nsamples(args->hdr);
+    int len = bcf_hdr_id2length(args->hdr,BCF_HL_FMT,fmt->id);
+	
+	
+	if ( !(ctx->unpacked & BCF_UN_FMT) ) bcf_unpack(ctx, BCF_UN_FMT);
+	
+	
+	uint32_t type = bcf_hdr_id2type(hdr,BCF_HL_FMT, tag_id);
+	bcf_fmt_t * fmt = bcf_get_fmt_id(ctx,  tag_id);
+	if(fmt==NULL) {
+		SEXP ext = PROTECT(allocVector(STRSXP,0));nprotect++;
+		UNPROTECT(nprotect);
+		return ext;
+		}
+	
+	LOG("format/%s has type = %d",att,type);
+	
+	switch(type) {
+		case BCF_HT_STR: {
+			SEXP ext;
+			char* dst=NULL;
+			int ndst=0;
+			int nret = bcf_get_format_char(hdr,ctx,att,dst,&ndst);
+			if(nret<0 || dst==NULL) {
+				ext = R_NilValue;
+				}
+			else
+				{
+				ext= mkString(dst[sample_index]);
+				}
+			free(dst);
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
+		case BCF_HT_INT: {
+			BCF_ERROR("HT_INT %s",att);
+			SEXP ext;
+			int ndst=0;
+			int32_t* dst=NULL;
+			int ret=bcf_get_format_int32(hdr,ctx,att,(void**)&dst,&ndst);
+			if(ret<0 || dst==NULL ) {
+				PROTECT(ext = Rf_allocVector(INTSXP,0)); nprotect++;
+				}
+			else
+				{
+				PROTECT(ext = Rf_allocVector(INTSXP,ndst)); nprotect++;
+				        for(int i=0;i< ndst;i++) {
+				               	INTEGER(ext)[i] = dst[i];
+				                }
 		
+				}
+			free(dst);
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
+		case BCF_HT_REAL: {
+			BCF_ERROR("HT_REAL %s",att);
+			SEXP ext;
+			int ndst=0;
+			float* dst=NULL;
+			int ret=bcf_get_format_float(hdr,ctx,att,(void**)&dst,&ndst);
+			if(ret<0 || dst==NULL ) {
+				PROTECT(ext = Rf_allocVector(REALSXP,0)); nprotect++;
+				}
+			else
+				{
+				PROTECT(ext = Rf_allocVector(REALSXP,ndst)); nprotect++;
+				        for(int i=0;i< ndst;i++) {
+				               	REAL(ext)[i] = dst[i];
+				                }
+		
+				}
+			free(dst);
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
+		case BCF_HT_FLAG: {
+			BCF_ERROR("HT_FLAG %s",att);
+			int is_set = bcf_get_format_flag(hdr,ctx,att,NULL,NULL)==1;
+			SEXP ext = ScalarLogical(is_set==1);
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
+		default:
+			{
+			BCF_WARNING("unknown FORMAT type");
+			SEXP ext = PROTECT(allocVector(STRSXP,0));nprotect++;
+			UNPROTECT(nprotect);
+			return ext;
+			break;
+			}
 		}
-	free(dst);
-	UNPROTECT(nprotect);
-	return ext;
+	return R_NilValue;
 	}
+#endif	
 

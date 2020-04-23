@@ -1,5 +1,5 @@
 NAME=rbcf
-.PHONY: all build install uninstall test
+.PHONY: all build install uninstall test doc
 
 all:
 	$(MAKE) uninstall build install test
@@ -23,6 +23,9 @@ local:
 
 test:
 	cd tests && R --no-save < test.rbcf.R
+
+doc:
+	cd doc && bash generate.sh
 
 clean:
 	rm -f $(NAME)*.tar.gz

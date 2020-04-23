@@ -1,20 +1,24 @@
 HTSDIR=htslib
 OBJECTS=rbcf.o $(HTSDIR)/libhts.a
 PKG_CFLAGS=
-PKG_CPPFLAGS+=-I$(HTSDIR) -Wall
+PKG_CPPFLAGS+=-I$(HTSDIR) -I. -Wall
 PKG_LIBS+=-L$(HTSDIR) -lcurl
 
-all: $(SHLIB)
+all: rbcf_version.h $(SHLIB)
 
 $(SHLIB) : $(HTSDIR)/libhts.a
 
-#librbcf.so: $(SHLIB)  $(HTSDIR)/libhts.a
+rbcf_version.h:
+	echo -n '#define RBCF_VERSION "' > $@
+	-git describe --tags | tr -d '\n' >> $@
+	echo '"' >> $@
 
-$(HTSDIR)/libhts.so : $(HTSDIR)/Makefile
-	cd htslib && make libhts.so
+#librbcf.so: $(SHLIB)  $(HTSDIR)/libhts.a $(HTSDIR)/version.h
 
-$(HTSDIR)/libhts.a : $(HTSDIR)/Makefile
-	cd htslib && make libhts.a
+
+$(HTSDIR)/libhts.so $(HTSDIR)/libhts.a $(HTSDIR)/version.h : $(HTSDIR)/Makefile
+	cd htslib && make $(notdir $@)
+
 	
 $(HTSDIR)/Makefile:
 	test -f $@ || git clone --branch 1.10.2 --depth 1 "https://github.com/samtools/htslib" $(HTSDIR)

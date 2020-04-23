@@ -32,6 +32,9 @@ THE SOFTWARE.
 #endif
 #include "htslib/tbx.h"
 #include "htslib/kseq.h"
+#include "htslib/version.h"
+#include "rbcf_version.h"
+
 
 #define WHERENL REprintf("[%s:%d] ",__FILE__,__LINE__)
 #define LOG(FormatLiteral, ...) do { WHERENL;REprintf("[LOG]" FormatLiteral "\n", ##__VA_ARGS__);} while(0)
@@ -56,6 +59,21 @@ typedef struct rbcffile_t
 	kstring_t tmp_line; // for reading line
 	int query_failed;
 	}RBcfFile,*RBcfFilePtr;
+
+
+
+#ifndef RBCF_VERSION
+	#define RBCF_VERSION "undefined"
+#endif
+
+SEXP RBCFGetVersion() {
+	return mkString(RBCF_VERSION);
+	}
+
+/* version of htslib */
+SEXP HtslibGetVersion() {
+	return mkString(HTS_VERSION_TEXT);
+	}
 
 static void RBcfFileFree(final RBcfFilePtr ptr) {
 	if (ptr==NULL) return;

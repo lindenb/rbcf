@@ -1,3 +1,14 @@
+
+#' @return the version of htslib
+htslib.version <-function()  {
+	.Call("HtslibGetVersion");
+	}
+
+#' @return the version of rcbf
+rcbf.version <-function()  {
+        .Call("RBCFGetVersion");
+        }
+
 #' Open a VCF or a BCF file
 #' 
 #' @param filename the path to the vcf file

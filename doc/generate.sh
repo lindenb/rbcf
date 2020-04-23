@@ -5,8 +5,17 @@ set -e
 cat << __EOF__ > tmp.tex
 \documentclass[12pt, a4paper,notitlepage,onecolumn]{article}
 \usepackage[utf8]{inputenc}
+\usepackage{xcolor}
 \usepackage{listings}
 \title{RBcf: An VCF API for R.}
+
+\lstset{
+  backgroundcolor = \color{lightgray},
+  language = R,
+  basicstyle=\ttfamily,
+  columns=fullflexible,
+  keepspaces=true,
+}
 
 \author{Pierre Lindenbaum / yokofakun/ Institut du Thorax . Nantes.}
 \date{\today}
@@ -24,11 +33,11 @@ ls *.R | sort | while read F
 do
 	echo -n '\subsection{' >> tmp.tex
 	head -n1 "${F}" | cut -c 3- | sed 's/$/}/' >>  tmp.tex
-	echo -e 'Code:\n\\begin{verbatim}' >> tmp.tex
+	echo -e 'Code:\n\\begin{lstlisting}' >> tmp.tex
 	tail -n+2 "${F}" >> tmp.tex
-	echo -e '\\end{verbatim}\nOutput:\n\\begin{verbatim}' >> tmp.tex
+	echo -e '\\end{lstlisting}\nOutput:\n\\begin{lstlisting}' >> tmp.tex
 	tail -n+2 "${F}" | R --no-save --quiet  >> tmp.tex
-	echo -e '\\end{verbatim}\n'  >> tmp.tex
+	echo -e '\\end{lstlisting}\n'  >> tmp.tex
 
 done
 

@@ -1,5 +1,7 @@
 useDynLib(rbcf)
 
+export(rcbf.version)
+export(htslib.version)
 export(bcf.open)
 export(bcf.close)
 export(bcf.nsamples)

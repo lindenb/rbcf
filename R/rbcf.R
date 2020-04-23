@@ -49,6 +49,15 @@ bcf.samples<-function(fp)
 	.Call("RBcfSamples",fp);
 	}
 
+#'
+#' @param fp the vcf reader
+#' @param sn the sample name
+bcf.sample2index<-function(fp,sn) {
+	sapply(sn,function(S) {
+		.Call("BcfConvertSampleToIndex0",fp,S) + 1 
+		})
+	}
+
 bcf.chromosomes<-function(fp)
 	{
 	.Call("RBcfSeqNames",fp)

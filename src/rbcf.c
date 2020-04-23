@@ -496,6 +496,22 @@ SEXP RBcfHeaderDict(SEXP sexpFile) {
 	}
 
 
+SEXP BcfConvertSampleToIndex0(SEXP sexpFile,SEXP sexpSample) {
+	int nprotect=0;
+	PROTECT(sexpFile);nprotect++;
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
+	ASSERT_NOT_NULL(hdr);
+	const char* sn = CHAR(asChar(sexpSample));
+	int sample_idx=-1;
+
+	if(sn!=NULL) {
+		sample_idx = bcf_hdr_id2int(hdr,BCF_DT_SAMPLE,sn);
+       		}
+	UNPROTECT(nprotect);
+	return ScalarInteger(sample_idx);
+	}
+
+
 SEXP RBcfQueryRegion(SEXP sexpFile,SEXP sexpInterval) {
 	int nprotect=0;
 	SEXP ext;
@@ -905,6 +921,7 @@ struct GenotypeShuttle {
 	size_t allele_capacity;
 	int error_flag;
 	};
+
 
 
 SEXP VariantGetGenotype(SEXP sexpCtx,SEXP sexpgtidx) {

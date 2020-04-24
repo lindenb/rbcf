@@ -4,15 +4,18 @@ PKG_CFLAGS=
 PKG_CPPFLAGS+=-I$(HTSDIR) -I. -Wall
 PKG_LIBS+=-L$(HTSDIR) -lcurl
 
-all: rbcf_version.h $(SHLIB)
+all:  $(SHLIB)
 
 $(SHLIB) : $(HTSDIR)/libhts.a rbcf_version.h $(HTSLIB)/version.h
+
+
+rbcf.o: rbcf_version.h  $(HTSDIR)/libhts.a  $(HTSLIB)/version.h
+
 
 rbcf_version.h:
 	echo -n '#define RBCF_VERSION "' > $@
 	-git describe --tags | tr -d '\n' >> $@
 	echo '"' >> $@
-
 
 
 $(HTSDIR)/libhts.so $(HTSDIR)/libhts.a $(HTSLIB)/version.h : $(HTSDIR)/Makefile

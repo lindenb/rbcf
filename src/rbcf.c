@@ -69,16 +69,46 @@ typedef struct array_of_strings {
 	int count;
 	}Tokens,*TokensPtr;
 	
-static void trim(char *s)
-	{
-    char * p = s;
-    size_t l = strlen(p);
+static void trim(char *s) {
+	char * p = s;
+	size_t l = strlen(p);
 
-    while(l>0 && isspace(p[l - 1])) p[--l] = 0;
-    while(l>0 && *p && isspace(*p)) ++p, --l;
+	while(l>0 && isspace(p[l - 1])) p[--l] = 0;
+	while(l>0 && *p && isspace(*p)) ++p, --l;
 
-    memmove(s, p, l + 1);
+	memmove(s, p, l + 1);
 	}	
+
+
+#define MAKE_ARRAY_API(NAME,TYPE) \
+typedef struct NAME##array_t {\
+	TYPE* data;\
+	size_t capacity;\
+	size_t size;\
+	} NAME##Array,* NAME##ArrayPtr;\
+NAME##ArrayPtr NAME##ArrayNew() {\
+	NAME##ArrayPtr ptr = (NAME##ArrayPtr)calloc(1,sizeof(NAME##Array));\
+	ptr->capacity = 10L;\
+	ptr->data = (TYPE*)calloc(ptr->capacity,sizeof(TYPE));\
+	return ptr;\
+	}\
+void NAME##ArrayFree(NAME##ArrayPtr ptr) {\
+	if(ptr==NULL) return;\
+	free(ptr->data);\
+	free(ptr);\
+	}\
+NAME##ArrayPtr NAME##ArrayPush(NAME##ArrayPtr ptr,TYPE v) {\
+	if(ptr->size>=ptr->capacity) {\
+		ptr->capacity+=10;\
+		ptr->data = (TYPE*)realloc(ptr->data,sizeof(TYPE)*(ptr->capacity));\
+		}\
+	ptr->data[ptr->size]=v;\
+	ptr->size++;\
+	return ptr;\
+	}
+
+MAKE_ARRAY_API(Int32,int32_t)
+MAKE_ARRAY_API(Float,float)
 
 static TokensPtr NewTokensPtr(const char* str,char delim) {
 	TokensPtr dest = (TokensPtr)malloc(sizeof(Tokens));
@@ -1570,12 +1600,138 @@ SEXP VariantGetAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	return R_NilValue;
 	}
 
-#ifdef XXX
-SEXP GenotypeAttributes(SEXP sexpGt,SEXP sexpatt) {
+
+SEXP GenotypeInt32Attribute(SEXP sexpGt,SEXP sexpatt) {
 	int nprotect=0;
 	
 	PROTECT(sexpGt);nprotect++;
 	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+	int sample_index = asInteger(VECTOR_ELT(sexpGt,2));
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	ASSERT_NOT_NULL(att);
+	Int32ArrayPtr array = Int32ArrayNew();
+
+
+	bcf_unpack(ctx, BCF_UN_FMT);
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+	
+
+	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		int ndst=0;
+		int32_t* dst=NULL;
+		int ret=bcf_get_format_int32(hdr,ctx,att,(void**)&dst,&ndst);
+		if(ret>=0 && dst!=NULL ) {
+			int per_sample = ndst/bcf_hdr_nsamples(hdr);
+			int32_t *ptr = dst + sample_index*per_sample;
+			for (int j=0; j< per_sample ; j++) {
+			    int32_t val=ptr[j];
+			    if(val==bcf_int32_vector_end ) break;
+			    //IGNORE if(val==bcf_int32_missing ) call->qsum[j] = 0;
+			    Int32ArrayPush(array,val);
+			    }
+			}
+		free(dst);
+		}
+
+	SEXP ext = PROTECT(allocVector(INTSXP,array->size));nprotect++;	
+ 	for(int i=0;i< array->size;i++) {
+	       	INTEGER(ext)[i] = array->data[i];
+		}
+
+	Int32ArrayFree(array);
+	
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+
+
+SEXP GenotypeFloatAttribute(SEXP sexpGt,SEXP sexpatt) {
+	int nprotect=0;
+	
+	PROTECT(sexpGt);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+	int sample_index = asInteger(VECTOR_ELT(sexpGt,2));
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	ASSERT_NOT_NULL(att);
+	FloatArrayPtr array = FloatArrayNew();
+
+
+	bcf_unpack(ctx, BCF_UN_FMT);
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+	
+
+	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		int ndst=0;
+		float* dst=NULL;
+		int ret=bcf_get_format_float(hdr,ctx,att,(void**)&dst,&ndst);
+		if(ret>=0 && dst!=NULL ) {
+			int per_sample = ndst/bcf_hdr_nsamples(hdr);
+			float *ptr = dst + sample_index*per_sample;
+			for (int j=0; j< per_sample ; j++) {
+			    float val=ptr[j];
+			    if(val==bcf_float_vector_end ) break;
+			    //IGNORE if(val==bcf_float_missing ) call->qsum[j] = 0;
+			    FloatArrayPush(array,val);
+			    }
+			}
+		free(dst);
+		}
+
+	SEXP ext = PROTECT(allocVector(REALSXP,array->size));nprotect++;	
+ 	for(int i=0;i< array->size;i++) {
+	       	REAL(ext)[i] = array->data[i];
+		}
+
+	FloatArrayFree(array);
+	
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+
+#ifdef XXX
+
+SEXP GenotypeStringAttribute(SEXP sexpGt,SEXP sexpatt) {
+	int nprotect=0;
+	SEXP ext = R_NilValue;
+	PROTECT(sexpGt);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+	int sample_index = asInteger(VECTOR_ELT(sexpGt,2));
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	ASSERT_NOT_NULL(att);
+
+	bcf_unpack(ctx, BCF_UN_FMT);
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+	
+
+	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		char* dst=NULL;
+		if(ret>=0 && dst!=NULL ) {
+			ext= ext= mkString(dst[sample_index]);
+			}
+		free(dst);
+		}
+
+	
+	
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+SEXP GenotypeAttributes(SEXP sexpGt,SEXP sexpatt) {
+	int nprotect=0;
+	PROTECT(sexpGt);nprotect++;
+	bcf_hdr_t* hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
 	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
 	int sample_index = asInteger(VECTOR_ELT(sexpGt,2));
 	const char* att = CHAR(asChar(sexpatt));
@@ -1594,7 +1750,7 @@ SEXP GenotypeAttributes(SEXP sexpGt,SEXP sexpatt) {
 		}
 	
 	int nsmpl = bcf_hdr_nsamples(args->hdr);
-    int len = bcf_hdr_id2length(args->hdr,BCF_HL_FMT,fmt->id);
+    	int len = bcf_hdr_id2length(args->hdr,BCF_HL_FMT,fmt->id);
 	
 	
 	if ( !(ctx->unpacked & BCF_UN_FMT) ) bcf_unpack(ctx, BCF_UN_FMT);

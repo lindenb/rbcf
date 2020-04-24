@@ -489,23 +489,77 @@ bcf.infos <-function(fp) {
 #' @return a table of filters
 bcf.formats <-function(fp) {
 	 .Call("BcfFormatTable",fp)
-}
+	}
 
 #' @param vc the variant
 #' @return the list INFOs for this variant
 variant.info.ids <-function(vc) {
-	s <-.Call("VariantGetInfoKeySet",vc)
+	.Call("VariantGetInfoKeySet",vc)
 	}
 
 #' @param vc the variant
 #' @return the list FORMATs for this variant
 variant.format.ids <-function(vc) {
-	s <-.Call("VariantGetFormatKeySet",vc)
+	.Call("VariantGetFormatKeySet",vc)
 	}
-#
+#' @param vc the variant
+#' @return VEP table for this variant or NULL
 variant.vep <-function(vc) {
-	s <-.Call("VariantVepTable",vc)
+	.Call("VariantVepTable",vc)
 	}
+#' @param vc the variant
+#' @return SNPEFF table for this variant or NULL
 variant.snpeff <-function(vc) {
-	s <-.Call("VariantSnpEffTable",vc)
+	.Call("VariantSnpEffTable",vc)
+	}
+
+
+#' @param gt the genotype
+#' @param att the key
+#' @return the values for this key+genotype
+#
+genotype.int.attribute <-function(gt,att) {
+	.Call("GenotypeInt32Attribute",gt,att)
+	}
+
+#' @param gt the genotype
+#' @param att the key
+#' @return the DP or -1
+#
+genotype.dp <-function(gt) {
+	v<-genotype.int.attribute(gt,"DP")
+	if(length(v)!=1) return(-1)
+	v[1]	
+	}
+genotype.has.dp <-function(gt) {
+	genotype.dp(gt)>=0	
+	}
+genotype.gq <-function(gt) {
+	v<-genotype.int.attribute(gt,"GQ")
+	if(length(v)!=1) return(-1)
+	v[1]	
+	}
+genotype.has.gq <-function(gt) {
+	genotype.gq(gt)>=0	
+	}
+genotype.pl <-function(gt) {
+	genotype.int.attribute(gt,"PL")
+	}
+genotype.has.pl<-function(gt) {
+	length(genotype.pl(gt))>0	
+	}
+genotype.ad <-function(gt) {
+	genotype.int.attribute(gt,"AD")
+	}
+genotype.has.ad <-function(gt) {
+	length(genotype.ad(gt))>0	
+	}
+
+
+#' @param gt the genotype
+#' @param att the key
+#' @return the values for this key+genotype
+#
+genotype.float.attribute <-function(gt,att) {
+	.Call("GenotypeFloatAttribute",gt,att)
 	}

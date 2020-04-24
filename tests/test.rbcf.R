@@ -91,6 +91,18 @@ test01<-function(filename,requireIndex) {
 			cat(genotype.nocall(gt),file=stderr())
 			cat(" phased:",file=stderr())
 			cat(genotype.phased(gt),file=stderr())
+			cat(" dp:",file=stderr())
+			cat(genotype.int.attribute(gt,"DP"),file=stderr())
+			cat(" hasdp:",file=stderr())
+			cat(genotype.has.dp(gt),file=stderr())
+			cat(" dp:",file=stderr())
+			cat(genotype.dp(gt),file=stderr())
+			cat(" ad:",file=stderr())
+			cat(genotype.int.attribute(gt,"AD"),file=stderr())
+			cat(" pl:",file=stderr())
+			cat(genotype.int.attribute(gt,"PL"),file=stderr())
+			cat(" gq:",file=stderr())
+			cat(genotype.int.attribute(gt,"GQ"),file=stderr())
 			cat("\n",file=stderr())
 			snidx<- snidx+1
 			}

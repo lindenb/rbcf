@@ -13,11 +13,12 @@ rbcf_version.h:
 	-git describe --tags | tr -d '\n' >> $@
 	echo '"' >> $@
 
-#librbcf.so: $(SHLIB)  $(HTSDIR)/libhts.a $(HTSDIR)/version.h
 
 
-$(HTSDIR)/libhts.so $(HTSDIR)/libhts.a $(HTSDIR)/version.h : $(HTSDIR)/Makefile
-	cd htslib && make $(notdir $@)
+
+$(HTSDIR)/libhts.so $(HTSDIR)/libhts.a : $(HTSDIR)/Makefile
+	cd $(HTSDIR) && $(MAKE) version.h
+	cd $(HTSDIR) && $(MAKE) $(notdir $@)
 
 	
 $(HTSDIR)/Makefile:

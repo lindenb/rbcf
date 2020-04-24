@@ -6,7 +6,7 @@ test01<-function(filename,requireIndex) {
 	stopifnot(bcf.nsamples(fp)==length(bcf.samples(fp)))
 	cat(bcf.samples(fp),file=stderr())
 	if(bcf.nsamples(fp)>0) {
-		stopifnot(match(bcf.sample1(fp,1),bcf.samples(fp))>0)
+		stopifnot(match(bcf.sample.at(fp,1),bcf.samples(fp))>0)
 		}
 	dict<-bcf.dictionary(fp)
 	head(dict)
@@ -74,7 +74,7 @@ test01<-function(filename,requireIndex) {
 		snidx<-1
 		while(snidx<=bcf.nsamples(fp)) {
 			gt <- variant.genotype(vc,snidx)
-			cat(bcf.sample1(fp,snidx),file=stderr())
+			cat(bcf.sample.at(fp,snidx),file=stderr())
 			cat(" alleles.idx[",file=stderr())
 			cat(genotype.alleles.idx0(gt),file=stderr())
 			cat("] ploidy:",file=stderr())

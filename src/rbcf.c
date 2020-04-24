@@ -861,6 +861,33 @@ SEXP RBcfCtxFilters(SEXP sexpCtx) {
 	return ext;
 	}
 
+SEXP VariantHasFilter(SEXP sexpCtx,SEXP sexpFilterName) {
+	int nprotect=0;
+	bcf1_t *ctx;
+	bcf_hdr_t* hdr;
+	SEXP ext;
+	PROTECT(sexpCtx);nprotect++;
+	
+	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	const char* filterName= CHAR(asChar(sexpFilterName));
+	
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	
+	bcf_unpack(ctx,BCF_UN_FLT);
+	
+	if(filterName!=NULL && bcf_has_filter(hdr,ctx,(char*)filterName)) {
+		ext = ScalarLogical(1);
+		}
+	else
+		{
+		ext = ScalarLogical(0);
+		}
+	UNPROTECT(nprotect);
+	return ext;
+	}
+	
 SEXP RBcfCtxVariantTypes(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;

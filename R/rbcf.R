@@ -57,18 +57,25 @@ bcf.sample2index<-function(fp,sn) {
 		.Call("BcfConvertSampleToIndex0",fp,S) + 1 
 		})
 	}
-
+#' list the indexed chromosomes 
+#' @param fp the vcf reader
+#' @return a list of chromosome
 bcf.chromosomes<-function(fp)
 	{
 	.Call("RBcfSeqNames",fp)
 	}
 
+#' alias of bcf.chromosomes
+#' @param fp the vcf reader
+#' @return a list of chromosome
 bcf.contigs<-function(fp)
 	{
 	bcf.chromosomes(fp)
 	}
 
-bcf.sample1<-function(fp,idx)
+#' @param fp the vcf reader
+#' @return the idx-th sample (1-based)
+bcf.sample.at<-function(fp,idx)
 	{
 	stopifnot(idx>0)
 	.Call("RBcfSampleAtIndex0",fp,idx-1)
@@ -287,6 +294,15 @@ variant.is.filtered<-function(vc) {
 #
 variant.filters<-function(vc) {
 	.Call("RBcfCtxFilters",vc);
+	}
+
+
+#' @param vc the variant
+#' @param fn filter name
+#' @return true if variant is filtered with 'fn'
+#
+variant.has.filter<-function(vc,fn) {
+	.Call("VariantHasFilter",vc,fn);
 	}
 
 

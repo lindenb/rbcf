@@ -6,7 +6,7 @@ PKG_LIBS+=-L$(HTSDIR) -lcurl
 
 all: rbcf_version.h $(SHLIB)
 
-$(SHLIB) : $(HTSDIR)/libhts.a
+$(SHLIB) : $(HTSDIR)/libhts.a rbcf_version.h $(HTSLIB)/version.h
 
 rbcf_version.h:
 	echo -n '#define RBCF_VERSION "' > $@
@@ -15,9 +15,7 @@ rbcf_version.h:
 
 
 
-
-$(HTSDIR)/libhts.so $(HTSDIR)/libhts.a : $(HTSDIR)/Makefile
-	cd $(HTSDIR) && $(MAKE) version.h
+$(HTSDIR)/libhts.so $(HTSDIR)/libhts.a $(HTSLIB)/version.h : $(HTSDIR)/Makefile
 	cd $(HTSDIR) && $(MAKE) $(notdir $@)
 
 	

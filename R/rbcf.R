@@ -335,6 +335,20 @@ variant.max.ploidy<-function(vc) {
 	.Call("RBcfCtxVariantMaxPloidy",vc);
 	}
 
+#' @param vc the variant
+#' @return the number of samples/genotypes for this variant
+variant.nsamples <-function(vc) {
+	.Call("VariantNSamples",vc);
+	}
+
+#' @param vc the variant
+#' @return the number of samples/genotypes for this variant
+variant.genotypes <-function(vc) {
+	sapply(1:variant.nsamples(vc),function(idx) {
+		variant.genotype(vc,idx)
+		})
+        }
+
 
 #' return the genotype for a variant
 #' 
@@ -407,7 +421,6 @@ genotype.hetnonref  <-function(gt) {
 
 #' @param gt the genotype
 #' @return TRUE if genotypes contains no allele '' or any is no call '.'
-#
 genotype.nocall  <-function(gt) {
 	alleles<-genotype.alleles.idx0(gt)
 	!is.null(alleles) || length(alleles)==0 || match(-1,alleles)<=0
@@ -419,6 +432,13 @@ genotype.nocall  <-function(gt) {
 genotype.phased  <-function(gt) {
 	.Call("RBcfCtxVariantGtPhased",gt);
 	}
+
+#' @param gt the genotype
+#' @return the name of the sample associated to the genotype
+genotype.sample  <-function(gt) {
+	.Call("GenotypeSample",gt)
+	}
+
 
 #' @param vc the variant
 #' @param att the INFO/Attribute

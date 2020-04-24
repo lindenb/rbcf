@@ -341,7 +341,7 @@ SEXP RBcfSampleAtIndex0(SEXP sexpFile,SEXP sexpIndex) {
 	int idx = asInteger(sexpIndex);
 	
 	if(idx<0 || idx >= bcf_hdr_nsamples(hdr)) {
-		BCF_WARNING("sample idx out of range %d/%d\n",bcf_hdr_nsamples(hdr));
+		BCF_WARNING("sample idx out of range %d/%d\n",idx,bcf_hdr_nsamples(hdr));
 		ext = R_NilValue;
 		}
 	else
@@ -957,6 +957,17 @@ SEXP RBcfCtxVariantIsSnp(SEXP sexpCtx) {
 	return ext;
 	}
 
+SEXP VariantNSamples(SEXP sexpCtx) {
+	int nprotect=0;
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t* hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+       	SEXP ext = ScalarInteger(bcf_hdr_nsamples(hdr));
+	UNPROTECT(nprotect);
+        return ext;
+        }
+
+
+
 SEXP RBcfCtxVariantMaxPloidy(SEXP sexpCtx) {
 	int nprotect=0;
 	bcf1_t *ctx;
@@ -1117,6 +1128,26 @@ SEXP RBcfCtxVariantGtAllelesIndexes0(SEXP sexpGt) {
 	Free(shuttle.alleles);
 	UNPROTECT(nprotect);
 	return ext;
+	}
+
+SEXP GenotypeSample(SEXP sexpGt) {
+        int nprotect=0;
+	SEXP ext;
+        PROTECT(sexpGt);nprotect++;
+        bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+        int sample_index = asInteger(VECTOR_ELT(sexpGt,2));
+
+        if( sample_index <0 || sample_index >= bcf_hdr_nsamples(hdr)) {
+                BCF_WARNING("sample idx out of range %d/%d\n",sample_index,bcf_hdr_nsamples(hdr));
+                ext = R_NilValue;
+                }
+        else
+                {
+                ext =  mkString(hdr->samples[sample_index]);
+	        }
+
+	UNPROTECT(nprotect);
+        return ext;
 	}
 
 SEXP RBcfCtxVariantGtPhased(SEXP sexpGt) {

@@ -13,7 +13,7 @@ while(!is.null(vc<-bcf.next(fp))) {
 	}
 
 if(!is.null(vc)) {
-	# print VEP table
+	# get the VEP table for the variant
 	predictions<-variant.vep(vc)
 	}
 
@@ -21,4 +21,3 @@ if(!is.null(vc)) {
 bcf.close(fp)
 # show
 predictions
-

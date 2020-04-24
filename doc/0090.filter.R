@@ -43,7 +43,18 @@ filters<-list(
 	list("desc"="variant has ID","predicate"=function(ctx) {variant.has.id(ctx)}),
 	list("desc"="variant ID match 'rs1*' ","predicate"=function(ctx) {grepl("^rs1",variant.id(ctx))}),
 	list("desc"="variant has INFO/AF_NFE","predicate"=function(ctx) {variant.has.attribute(ctx,"AF_NFE")}),
-	list("desc"="variant has INFO/AF_NFE > 1E-5 ","predicate"=function(ctx) {variant.has.attribute(ctx,"AF_NFE") && length(which(variant.attribute(ctx,"AF_NFE") > 1E-5))>0})
+	list("desc"="variant has INFO/AF_NFE > 1E-5","predicate"=function(ctx) {variant.has.attribute(ctx,"AF_NFE") && length(which(variant.attribute(ctx,"AF_NFE") > 1E-5))>0}),
+	list("desc"="Missense in PLEKHN1 (VEP)","predicate"=function(ctx) {
+		# NO VEP annotation ?
+		if(!variant.has.attribute(ctx,"CSQ")) return(FALSE);
+		# get VEP annotation
+		predictions <- variant.vep(ctx)
+		# In SCN5A
+		predictions <- predictions[which(predictions$SYMBOL=="PLEKHN1"),]
+		# Consequence must contain missense
+		predictions <- predictions[grep("missense_variant",predictions$Consequence),]
+		nrow(predictions)>0
+		})
 	)
 
 # count the variant for each filter

@@ -8,11 +8,11 @@ fp <- bcf.open(filename,FALSE)
 # current variant
 vc <- NULL
 while(!is.null(vc<-bcf.next(fp))) {
-	#find the first variant having an INFO/CSQ attribute
+	#find the first variant having an INFO/ANN attribute
 	if(variant.has.attribute(vc,"ANN")) break;
 	}
 if(!is.null(vc)) {
-	# print SNPEFF table
+	# get SNPEFF table
 	predictions<-variant.snpeff(vc)
 	}
 # dispose the vcf reader

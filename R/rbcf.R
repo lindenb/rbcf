@@ -120,6 +120,7 @@ bcf.dictionary<-function(fp)
 	.Call("RBcfHeaderDict",fp);
 	}
 
+
 #' prepare the VCF reader for a new vcf iteration over a given interval.
 #' VCF reader must be associated and opened with a valid index.
 #' 
@@ -481,4 +482,10 @@ variant.info.ids <-function(vc) {
 variant.format.ids <-function(vc) {
 	s <-.Call("VariantGetFormatKeySet",vc)
 	}
-	
+#
+variant.vep <-function(vc) {
+	s <-.Call("VariantVepTable",vc)
+	}
+variant.snpeff <-function(vc) {
+	s <-.Call("VariantSnpEffTable",vc)
+	}

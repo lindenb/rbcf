@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 */
+#include <math.h>
 #include <R.h>
 #include <Rinternals.h>
 #include <Rdefines.h>
@@ -35,7 +36,8 @@ THE SOFTWARE.
 #include "htslib/version.h"
 #include "rbcf_version.h"
 
-
+#define VEP_CSQ_KEY "CSQ"
+#define VEP_FORMAT "Format: "
 #define WHERENL REprintf("[%s:%d] ",__FILE__,__LINE__)
 #define LOG(FormatLiteral, ...) do { WHERENL;REprintf("[LOG]" FormatLiteral "\n", ##__VA_ARGS__);} while(0)
 #define BCF_WARNING(FormatLiteral, ...) do { WHERENL;REprintf("[WARN]" FormatLiteral "\n", ##__VA_ARGS__);} while(0)
@@ -58,10 +60,53 @@ typedef struct rbcffile_t
 	bcf1_t* tmp_ctx; // tmp variant ctx for reading
 	kstring_t tmp_line; // for reading line
 	int query_failed;
+
 	}RBcfFile,*RBcfFilePtr;
 
+typedef struct array_of_strings {
+	char* dup;
+	char** tokens;
+	int count;
+	}Tokens,*TokensPtr;
+	
+static void trim(char *s)
+	{
+    char * p = s;
+    size_t l = strlen(p);
 
+    while(l>0 && isspace(p[l - 1])) p[--l] = 0;
+    while(l>0 && *p && isspace(*p)) ++p, --l;
 
+    memmove(s, p, l + 1);
+	}	
+
+static TokensPtr NewTokensPtr(const char* str,char delim) {
+	TokensPtr dest = (TokensPtr)malloc(sizeof(Tokens));
+	ASSERT_NOT_NULL(dest);
+	memset((void*)dest,0,sizeof(Tokens));
+	dest->dup = strdup(str);
+	char* p = dest->dup;
+	char* prev = p;
+	for(;;) {
+		if(*p==delim || *p==0) {
+			dest->tokens = (char**)realloc(dest->tokens,sizeof(char*)*(1+dest->count));
+			dest->tokens[dest->count] = prev;
+			dest->count++;
+			if(*p==0) break;
+			*p=0;
+			prev=p+1;
+			}
+		++p;
+		}
+	return dest;
+	}
+
+void FreeTokensPtr(TokensPtr dest) {
+	if(dest==NULL) return;
+	free(dest->dup);
+	free(dest->tokens);
+	free(dest);
+	}
 #ifndef RBCF_VERSION
 	#define RBCF_VERSION "undefined"
 #endif
@@ -79,6 +124,7 @@ static void RBcfFileFree(final RBcfFilePtr ptr) {
 	if (ptr==NULL) return;
 
 	free(ptr->tmp_line.s);
+
 	if ( ptr->tmp_ctx) bcf_destroy1(ptr->tmp_ctx);
 	if ( ptr->itr ) hts_itr_destroy(ptr->itr);
 	if ( ptr->tbx ) tbx_destroy(ptr->tbx);
@@ -189,6 +235,8 @@ SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx) {
 		LOG("Cannot read header from %s.",filename);
 		goto die;
 		}
+	
+	
 
 	SEXP sexpheader = PROTECT(R_MakeExternalPtr(hdr, R_NilValue, R_NilValue));nprotect++;
 	R_RegisterCFinalizerEx(sexpheader,RBcfHeaderFinalizer, TRUE);
@@ -254,6 +302,7 @@ SEXP RBcfSeqNames(SEXP sexpFile) {
 	UNPROTECT(nprotect);
 	return ext;
 	}
+
 
 SEXP RBcfNSamples(SEXP sexpFile) {
 	int n=0;
@@ -681,7 +730,8 @@ SEXP RBcfCtxHasId(SEXP sexpCtx) {
 	PROTECT(sexpCtx);nprotect++;
 	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
-	ext = ScalarLogical(ctx->d.id!=NULL);
+	bcf_unpack(ctx,BCF_UN_STR);
+	ext = ScalarLogical(ctx->d.id!=NULL && strcmp(ctx->d.id,".")!=0 && strcmp(ctx->d.id,"")!=0);
 	UNPROTECT(nprotect);
 	return ext;
 	}
@@ -693,6 +743,7 @@ SEXP RBcfCtxId(SEXP sexpCtx) {
 	PROTECT(sexpCtx);nprotect++;
 	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
+	bcf_unpack(ctx,BCF_UN_STR);
 	if(ctx->d.id) {
 		ext = mkString(ctx->d.id);
 		}
@@ -724,6 +775,7 @@ SEXP RBcfCtxNAlleles(SEXP sexpCtx) {
 	PROTECT(sexpCtx);nprotect++;
 	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
+	bcf_unpack(ctx,BCF_UN_STR);
 	ext = ScalarInteger(ctx->n_allele);
 	UNPROTECT(nprotect);
 	return ext;
@@ -792,7 +844,7 @@ SEXP RBcfCtxHasQual(SEXP sexpCtx) {
 	PROTECT(sexpCtx);nprotect++;
 	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
-	ext = ScalarLogical(!bcf_float_is_missing(ctx->qual));
+	ext = ScalarLogical(bcf_float_is_missing(ctx->qual)==0 && !isnan(ctx->qual));
 	UNPROTECT(nprotect);
 	return ext;
 	}
@@ -804,13 +856,7 @@ SEXP RBcfCtxQual(SEXP sexpCtx) {
 	PROTECT(sexpCtx);nprotect++;
 	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
-	if(bcf_float_is_missing(ctx->qual)) {
-		ext = R_NilValue;
-		}
-	else
-		{
-		ext = ScalarReal(ctx->qual);
-		}
+	ext = ScalarReal(ctx->qual);
 	UNPROTECT(nprotect);
 	return ext;
 	}
@@ -827,7 +873,7 @@ SEXP RBcfCtxFiltered(SEXP sexpCtx) {
 	ASSERT_NOT_NULL(ctx);
 	ASSERT_NOT_NULL(hdr);
 	bcf_unpack(ctx,BCF_UN_FLT);
-	ext = ScalarLogical(!bcf_has_filter(hdr,ctx,"PASS"));
+	ext = ScalarLogical(bcf_has_filter(hdr,ctx,"PASS")==0);
 	UNPROTECT(nprotect);
 	return ext;
 	}
@@ -906,7 +952,7 @@ SEXP RBcfCtxVariantIsSnp(SEXP sexpCtx) {
 	PROTECT(sexpCtx);nprotect++;
 	ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
 	ASSERT_NOT_NULL(ctx);
-	ext = ScalarLogical(bcf_is_snp(ctx));
+	ext = ScalarLogical(bcf_is_snp(ctx)!=0);
 	UNPROTECT(nprotect);
 	return ext;
 	}
@@ -1112,6 +1158,10 @@ SEXP VariantHasAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	UNPROTECT(nprotect);
 	return ext;
 	}
+
+
+
+
 	
 SEXP VariantGetInfoKeySet(SEXP sexpCtx) {
 	int i,nprotect=0;
@@ -1177,9 +1227,211 @@ SEXP VariantGetFormatKeySet(SEXP sexpCtx) {
 	return ext;
 	}
 
+SEXP VariantVepTable(SEXP sexpCtx) {
+	int nprotect=0;
+	SEXP ext = R_NilValue;
+	char* csq_str =NULL;
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+
+	/** check variant has VEP tag */
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, VEP_CSQ_KEY);
+	if(!(bcf_hdr_idinfo_exists(hdr,BCF_HL_INFO,tag_id))) goto theend;
+
+	/** search VEP_CSQ_KEY in header */
+	char* format = NULL;
+	
+	for(int hidx=0; hidx <hdr->nhrec; hidx++) {
+		bcf_hrec_t *hrec = hdr->hrec[hidx];
+        if ( hrec->type!= BCF_HL_INFO) continue;
+        int i = bcf_hrec_find_key(hrec,"ID");
+		if(i<0 || strcmp(hrec->vals[i],VEP_CSQ_KEY)!=0) continue;
+        i = bcf_hrec_find_key(hrec,"Description");
+		if(i<0)  {
+			BCF_WARNING("Cannot find Description, in INFO/"VEP_CSQ_KEY);
+			break;
+			}
+		char* format_p = strstr(hrec->vals[i],VEP_FORMAT);
+		if(format_p==NULL) {
+			BCF_WARNING("Cannot find " VEP_FORMAT " in INFO/"VEP_CSQ_KEY);
+			break;
+			}
+		format_p += strlen(VEP_FORMAT);
+		format = format_p;
+		break;
+		}
+	if(format==NULL) goto theend;
+
+	
+	bcf_unpack(ctx, BCF_UN_INFO);
+	bcf_info_t* info = bcf_get_info_id(ctx,  tag_id);
+	if(info==NULL) goto theend;
+	
+	
+	int ndst=0;
+	int ret=bcf_get_info_string(hdr,ctx,VEP_CSQ_KEY,(void**)& csq_str,&ndst);
+	if(ret<0 ||  csq_str==NULL) goto theend;
+
+	
+	TokensPtr fmtTokens = NewTokensPtr(format,'|');
+	TokensPtr transcriptTokens = NewTokensPtr(csq_str,',');
+	
+	/** alloc table */
+	ext = PROTECT(Rf_allocVector(VECSXP,fmtTokens->count));nprotect++;
+	SEXP colNames = PROTECT(allocVector(STRSXP, fmtTokens->count));nprotect++;
+	SEXP rowNames = PROTECT(Rf_allocVector(STRSXP,transcriptTokens->count)); nprotect++;
+	/* create columns */
+	SEXP* columns=(SEXP*)malloc(sizeof(SEXP)*fmtTokens->count);
+	ASSERT_NOT_NULL(columns);
+	for(int x=0;x<fmtTokens->count;++x)
+		{
+		columns[x]=PROTECT(Rf_allocVector(STRSXP,transcriptTokens->count));nprotect++;
+		SET_VECTOR_ELT(ext, x, columns[x]);
+		// set header
+		SET_STRING_ELT(colNames, x, mkChar(fmtTokens->tokens[x]));
+		}
+	
+
+	/* scan each transcript */
+	for(int y=0;y< transcriptTokens->count;++y) {
+		const char* transcript = transcriptTokens->tokens[y];
+		TokensPtr components = NewTokensPtr(transcript,'|');
+		for(int x=0;x< fmtTokens->count;++x)
+			{
+			SET_STRING_ELT(columns[x],y,mkChar(x<components->count?components->tokens[x]:""));
+			}
+		FreeTokensPtr(components);
+		//set name for this row
+		char tmp[10];
+		sprintf(tmp,"%d",(y+1));
+		SET_STRING_ELT(rowNames, y, mkChar(tmp));
+
+		}
+	/* set the columns' name of the table */	
+	namesgets(ext, colNames);
+   // https://stackoverflow.com/questions/23547625
+   SEXP cls = PROTECT(allocVector(STRSXP, 1));nprotect++;
+   SET_STRING_ELT(cls, 0, mkChar("data.frame"));
+   classgets(ext, cls);
+   setAttrib(ext, R_RowNamesSymbol, rowNames);
+	
+	free(columns);
+	FreeTokensPtr(fmtTokens);
+	FreeTokensPtr(transcriptTokens);
+	
+	theend:
+		UNPROTECT(nprotect);
+		return ext;
+	}
+
+#define SNPEFF_ANN_KEY "ANN"
+
+SEXP VariantSnpEffTable(SEXP sexpCtx) {
+	int nprotect=0;
+	SEXP ext = R_NilValue;
+	char* csq_str =NULL;
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+
+	/** check variant has ANN tag */
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, SNPEFF_ANN_KEY);
+	if(!(bcf_hdr_idinfo_exists(hdr,BCF_HL_INFO,tag_id))) goto theend;
+
+	/** search SNPEFF_ANN_KEY in header */
+	char* format = NULL;
+	
+	for(int hidx=0; hidx <hdr->nhrec; hidx++) {
+		bcf_hrec_t *hrec = hdr->hrec[hidx];
+        if ( hrec->type!= BCF_HL_INFO) continue;
+        int i = bcf_hrec_find_key(hrec,"ID");
+		if(i<0 || strcmp(hrec->vals[i],SNPEFF_ANN_KEY)!=0) continue;
+        i = bcf_hrec_find_key(hrec,"Description");
+		if(i<0)  {
+			BCF_WARNING("Cannot find Description, in INFO/"SNPEFF_ANN_KEY);
+			break;
+			}
+		char* format_p = strchr(hrec->vals[i],'\'');
+		if(format_p==NULL) {
+			BCF_WARNING("Cannot find \' in INFO/"SNPEFF_ANN_KEY);
+			break;
+			}
+		format = format_p+1;
+		break;
+		}
+	if(format==NULL) goto theend;
+
+	
+	bcf_unpack(ctx, BCF_UN_INFO);
+	bcf_info_t* info = bcf_get_info_id(ctx,  tag_id);
+	if(info==NULL) goto theend;
+	
+	
+	int ndst=0;
+	int ret=bcf_get_info_string(hdr,ctx,SNPEFF_ANN_KEY,(void**)& csq_str,&ndst);
+	if(ret<0 ||  csq_str==NULL) goto theend;
+
+	
+	TokensPtr fmtTokens = NewTokensPtr(format,'|');
+	for(int i=0;i< fmtTokens->count;i++) {
+		trim(fmtTokens->tokens[i]);
+		char* p= strchr(fmtTokens->tokens[i],'\''); //last contains quote : ARNINGS / INFO'">
+		if(p!=NULL && *(p+1)==0) *p=0;
+		}
+	
+	TokensPtr transcriptTokens = NewTokensPtr(csq_str,',');
+	
+	/** alloc table */
+	ext = PROTECT(Rf_allocVector(VECSXP,fmtTokens->count));nprotect++;
+	SEXP colNames = PROTECT(allocVector(STRSXP, fmtTokens->count));nprotect++;
+	SEXP rowNames = PROTECT(Rf_allocVector(STRSXP,transcriptTokens->count)); nprotect++;
+	/* create columns */
+	SEXP* columns=(SEXP*)malloc(sizeof(SEXP)*fmtTokens->count);
+	ASSERT_NOT_NULL(columns);
+	for(int x=0;x<fmtTokens->count;++x)
+		{
+		columns[x]=PROTECT(Rf_allocVector(STRSXP,transcriptTokens->count));nprotect++;
+		SET_VECTOR_ELT(ext, x, columns[x]);
+		// set header
+		SET_STRING_ELT(colNames, x, mkChar(fmtTokens->tokens[x]));
+		}
+	
+
+	/* scan each transcript */
+	for(int y=0;y< transcriptTokens->count;++y) {
+		const char* transcript = transcriptTokens->tokens[y];
+		TokensPtr components = NewTokensPtr(transcript,'|');
+		for(int x=0;x< fmtTokens->count;++x)
+			{
+			SET_STRING_ELT(columns[x],y,mkChar(x<components->count?components->tokens[x]:""));
+			}
+		FreeTokensPtr(components);
+		//set name for this row
+		char tmp[10];
+		sprintf(tmp,"%d",(y+1));
+		SET_STRING_ELT(rowNames, y, mkChar(tmp));
+
+		}
+	/* set the columns' name of the table */	
+	namesgets(ext, colNames);
+   // https://stackoverflow.com/questions/23547625
+   SEXP cls = PROTECT(allocVector(STRSXP, 1));nprotect++;
+   SET_STRING_ELT(cls, 0, mkChar("data.frame"));
+   classgets(ext, cls);
+   setAttrib(ext, R_RowNamesSymbol, rowNames);
+	
+	free(columns);
+	FreeTokensPtr(fmtTokens);
+	FreeTokensPtr(transcriptTokens);
+	
+	theend:
+		UNPROTECT(nprotect);
+		return ext;
+	}
+
 SEXP VariantGetAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	int nprotect=0;
-	
 	PROTECT(sexpCtx);nprotect++;
 	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
 	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));

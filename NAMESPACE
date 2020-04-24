@@ -50,6 +50,6 @@ export(bcf.infos)
 export(bcf.formats)
 export(variant.info.ids)
 export(variant.format.ids)
-
-
+export(variant.vep)
+export(variant.snpeff)
 

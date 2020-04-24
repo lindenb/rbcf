@@ -31,10 +31,19 @@ filters<-list(
 	list("desc"="CHROM is '1'","predicate"=function(ctx) { variant.contig(ctx)=="1"} ),
 	list("desc"="POS is even","predicate"=function(ctx) { (variant.pos(ctx)%%2)==1} ),
 	list("desc"="PASS filter","predicate"=function(ctx) {!variant.is.filtered(ctx)} ),
+	list("desc"="count(FILTER)>1","predicate"=function(ctx) {length(variant.filters(ctx))>1} ),
 	list("desc"="FILTER contains SEGDUP","predicate"=function(ctx) {variant.has.filter(ctx,"SEGDUP")} ),
 	list("desc"="SNP","predicate"=function(ctx) {variant.is.snp(ctx)} ),
+	list("desc"="POS!=END","predicate"=function(ctx) { variant.pos(ctx)!=variant.end(ctx)} ),
 	list("desc"="not diallelic","predicate"=function(ctx) {variant.nalleles(ctx)!=2} ),
-	list("desc"="REF is 'A'","predicate"=function(ctx) {variant.reference(ctx)=="A"} )
+	list("desc"="REF is 'A'","predicate"=function(ctx) {variant.reference(ctx)=="A"} ),
+	list("desc"="any allele is 'A'","predicate"=function(ctx) {"A"  %in% variant.alleles(ctx)} ),
+	list("desc"="any ALT allele is 'A'","predicate"=function(ctx) {"A"  %in% variant.alt.alleles(ctx)} ),
+	list("desc"="No QUAL","predicate"=function(ctx) {!variant.has.qual(ctx)} ),
+	list("desc"="variant has ID","predicate"=function(ctx) {variant.has.id(ctx)}),
+	list("desc"="variant ID match 'rs1*' ","predicate"=function(ctx) {grepl("^rs1",variant.id(ctx))}),
+	list("desc"="variant has INFO/AF_NFE","predicate"=function(ctx) {variant.has.attribute(ctx,"AF_NFE")}),
+	list("desc"="variant has INFO/AF_NFE > 1E-5 ","predicate"=function(ctx) {variant.has.attribute(ctx,"AF_NFE") && length(which(variant.attribute(ctx,"AF_NFE") > 1E-5))>0})
 	)
 
 # count the variant for each filter

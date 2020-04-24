@@ -1,0 +1,6 @@
+language: r
+
+script:
+  - make install
+  - make test
+  - make doc

@@ -22,8 +22,7 @@ local:
 	$(MAKE) install2
 	$(MAKE) test
 
-test:
-	cd tests && R --no-save < test.rbcf.R
+test: doc
 
 doc:
 	cd tests && bash generate.sh

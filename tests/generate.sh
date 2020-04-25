@@ -69,8 +69,7 @@ cat << __EOF__ >> tmp.tex
 __EOF__
 
 pdflatex tmp.tex
-mv tmp.pdf ../doc/rbcf_examples.pdf
-rm tmp.tex
+mv -v tmp.pdf ../doc/rbcf_examples.pdf
+rm -v tmp.tex
 
-mv tmp.md  ../README.md
-
+mv -v tmp.md  ../README.md

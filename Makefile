@@ -5,6 +5,7 @@ all:
 	$(MAKE) uninstall build install test
 
 build:
+	rm -f $(NAME)*.tar.gz
 	R CMD build .
 
 install: build

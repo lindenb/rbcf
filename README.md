@@ -5,6 +5,21 @@ R Bindings for htslib/bcf+vcf
 
 ![Last commit](https://img.shields.io/github/last-commit/lindenb/rbcf.png)
 
+## INSTALL
+
+Requirements: R, git, curl-dev, 
+
+```
+git clone "https://github.com/lindenb/rbcf"
+
+cd rbcf
+
+# if needed
+make uninstall
+
+make install
+```
+
 ## Author
 
 Pierre Lindenbaum PhD. Institut du Thorax. Nantes, France.

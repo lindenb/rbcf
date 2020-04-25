@@ -2,7 +2,7 @@
 # load rbcf
 library(rbcf)
 # A vcf
-filename <- "../tests/data/gnomad.exomes.r2.0.1.sites.vcf"
+filename <- "./data/gnomad.exomes.r2.0.1.sites.bcf"
 # we don't need the index for this file
 fp <- bcf.open(filename,FALSE)
 # current variant

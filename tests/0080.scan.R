@@ -21,11 +21,11 @@ count.variants<-function(filename) {
 
 # filenames
 vcfs<-c(
-	"../tests/data/gnomad.exomes.r2.0.1.sites.vcf",
-	"../tests/data/rotavirus_rf.01.vcf",
-	"../tests/data/rotavirus_rf.02.vcf.gz",
-	"../tests/data/rotavirus_rf.03.vcf.gz",
-	"../tests/data/rotavirus_rf.04.bcf"
+	"./data/gnomad.exomes.r2.0.1.sites.bcf",
+	"./data/rotavirus_rf.01.vcf",
+	"./data/rotavirus_rf.02.vcf.gz",
+	"./data/rotavirus_rf.03.vcf.gz",
+	"./data/rotavirus_rf.04.bcf"
 	)
 # print the number of variants for each vcf
 for(f in vcfs) {

@@ -23,7 +23,7 @@ count.variants<-function(filename,predicate) {
 }
 
 # A vcf
-filename <- "../tests/data/gnomad.exomes.r2.0.1.sites.vcf"
+filename <- "./data/gnomad.exomes.r2.0.1.sites.bcf"
 # filters
 filters<-list(
 	list("desc"="accept all","predicate"=function(ctx) {TRUE} ),
@@ -43,7 +43,7 @@ filters<-list(
 	list("desc"="variant has ID","predicate"=function(ctx) {variant.has.id(ctx)}),
 	list("desc"="variant ID match 'rs1*' ","predicate"=function(ctx) {grepl("^rs1",variant.id(ctx))}),
 	list("desc"="variant has INFO/AF_NFE","predicate"=function(ctx) {variant.has.attribute(ctx,"AF_NFE")}),
-	list("desc"="variant has INFO/AF_NFE > 1E-5","predicate"=function(ctx) {variant.has.attribute(ctx,"AF_NFE") && length(which(variant.attribute(ctx,"AF_NFE") > 1E-5))>0}),
+	list("desc"="variant has INFO/AF_NFE > 1E-5","predicate"=function(ctx) {variant.has.attribute(ctx,"AF_NFE") && length(which(variant.float.attribute(ctx,"AF_NFE") > 1E-5))>0}),
 	list("desc"="Missense in PLEKHN1 (VEP)","predicate"=function(ctx) {
 		# NO VEP annotation ?
 		if(!variant.has.attribute(ctx,"CSQ")) return(FALSE);
@@ -59,7 +59,7 @@ filters<-list(
 
 # count the variant for each filter
 for(flt in filters) {
-	cat(paste(flt[["desc"]]," ",count.variants(filename,flt[["predicate"]]),"\n"))
+	print(paste(basename(filename)," filter:",flt[["desc"]]," count:",count.variants(filename,flt[["predicate"]]),"\n"))
 	}
 
 	

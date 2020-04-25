@@ -126,11 +126,27 @@ bcf.dictionary<-function(fp)
 #' 
 #' @param fp the vcf reader
 #' @param interval the genomic interval to be scanned
-#' @return TRUE on success
+#' @param collect if TRUE return a list of variants in the region or NULL on failure
+#' @return TRUE on success or a list of variant if collect=TRUE
 #' @examples
-bcf.query<-function(fp,interval) {
+bcf.query<-function(fp,interval,collect=FALSE) {
 	stopifnot(is.character(interval))
-	.Call("RBcfQueryRegion",fp,interval);
+	ret<-.Call("RBcfQueryRegion",fp,interval);
+	
+	if(collect) {
+		if(!ret) return(NULL);
+		# initialize
+		variants <-list()
+		n<- 1
+		# loop while we can read a variant
+			while(!is.null(vc<-bcf.next(fp))) {
+				#append
+				variants[[n]] = vc
+				n <- n + 1
+				}
+		return(variants)
+		}
+	ret
 	}
 	
 #' read the next Variant Context in the VCF reader
@@ -387,7 +403,7 @@ genotype.ploidy <-function(gt) {
 	v
 	}
 
-#' @param gt the genotype
+#' @param gt the g==enotype
 #' @return TRUE if genotype is diploid and all alleles are reference
 #
 genotype.homref <-function(gt) {
@@ -423,7 +439,7 @@ genotype.hetnonref  <-function(gt) {
 #' @return TRUE if genotypes contains no allele '' or any is no call '.'
 genotype.nocall  <-function(gt) {
 	alleles<-genotype.alleles.idx0(gt)
-	!is.null(alleles) || length(alleles)==0 || match(-1,alleles)<=0
+	is.null(alleles) || length(alleles)==0 || -1 %in% alleles
 	}
 
 #' @param gt the genotype
@@ -452,26 +468,26 @@ variant.has.attribute <-function(vc,att) {
 #' @param vc the variant
 #' @param att the INFO/Attribute
 #' @param splitString split strings using commas
-#' @return the the INFO attribute for the given key. The output is a vector (empty if the attribute was not found) or a Boolean if the attribute is a Type=Flag
-variant.attribute <-function(vc,att, splitString = TRUE) {
+#' @return the the INFO attribute for the given key.
+variant.string.attribute <-function(vc,att, split = TRUE) {
 	stopifnot(is.character(att))
-	s <-.Call("VariantGetAttribute",vc,att)
-	if(is.null(s)) {
-		c()
-	} else if (is.logical(s)) {
-		s
-	} else if(is.character(s)) {
-		if( is.null(s) || length(s)==0 ) {
-			c()
-		} else if(!splitString) {
-			c(s)
-		} else {
-			 unlist(strsplit(s, split=","))
+	s <-.Call("VariantStringAttribute",vc,att)
+	if( !is.null(s) && length(s)>0 && split) {
+		s <- unlist(strsplit(s, split=","))
 		}
-	} else {
-		s
-		}
+	s
 	}
+
+variant.int.attribute <-function(vc,att) {
+	.Call("VariantIntAttribute",vc,att)
+	}
+variant.float.attribute <-function(vc,att) {
+	.Call("VariantFloatAttribute",vc,att)
+	}
+variant.flag.attribute <-function(vc,att) {
+	.Call("VariantFlagAttribute",vc,att)
+	}
+
 
 #' @param fp the vcf reader
 #' @return a table of filters
@@ -522,6 +538,23 @@ genotype.int.attribute <-function(gt,att) {
 	.Call("GenotypeInt32Attribute",gt,att)
 	}
 
+
+#' @param gt the genotype
+#' @param att the key
+#' @return a String for this flag+genotype or NULL
+#
+genotype.string.attribute <-function(gt,att) {
+	.Call("GenotypeStringAttribute",gt,att)
+	}
+
+#' @param gt the genotype
+#' @return TRUE if genotype is filtered (FORMAT/FT is set)
+#
+genotype.filtered <-function(gt) {
+	flt<- genotype.string.attribute(g,"FT")
+	!(is.null(flt) || length(flt)==0 || flt==".")
+	}
+
 #' @param gt the genotype
 #' @param att the key
 #' @return the DP or -1
@@ -542,15 +575,19 @@ genotype.gq <-function(gt) {
 genotype.has.gq <-function(gt) {
 	genotype.gq(gt)>=0	
 	}
+#' @return PL or empty vector
 genotype.pl <-function(gt) {
 	genotype.int.attribute(gt,"PL")
 	}
+#' @return TRUE if PL is available 
 genotype.has.pl<-function(gt) {
 	length(genotype.pl(gt))>0	
 	}
+#' @return AD or rempty vector
 genotype.ad <-function(gt) {
 	genotype.int.attribute(gt,"AD")
 	}
+#' @return TRUE if AD is available 
 genotype.has.ad <-function(gt) {
 	length(genotype.ad(gt))>0	
 	}

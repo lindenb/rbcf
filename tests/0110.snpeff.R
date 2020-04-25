@@ -2,7 +2,7 @@
 # load rbcf
 library(rbcf)
 # A vcf
-filename <- "../tests/data/rotavirus_rf.ann.vcf.gz"
+filename <- "./data/rotavirus_rf.ann.vcf.gz"
 # we don't need the index for this file
 fp <- bcf.open(filename,FALSE)
 # current variant

@@ -25,7 +25,7 @@ test:
 	cd tests && R --no-save < test.rbcf.R
 
 doc:
-	cd doc && bash generate.sh
+	cd tests && bash generate.sh
 
 clean:
 	rm -f $(NAME)*.tar.gz

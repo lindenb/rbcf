@@ -43,7 +43,7 @@ paste("RBCF:",rcbf.version())
 **Output**:
 
 ```
-[1] "HTSLIB: 1.10.2-dirty"
+[1] "HTSLIB: 1.10.2"
 [1] "RBCF: 0.0-1"
 ```
 
@@ -922,6 +922,87 @@ bcf.close(fp)
 [1] "genotype has AD ?  TRUE"
 [1] "genotype AD  4" "genotype AD  1"
 [1] TRUE
+```
+
+
+### Writing variants to a new VCF/BCF file
+
+**Code**:
+
+```
+# load rbcf
+library(rbcf)
+# vcf input filename
+filenamein = "./data/rotavirus_rf.01.vcf"
+# output vcf filename. "-" is standard output
+filenameout =  "-"
+
+fp <- bcf.open(filenamein,FALSE)
+# create a new VCF writer using the header from 'fp'
+out <- bcf.new.writer(fp,filenameout);
+# loop while we can read a variant
+while(!is.null(vc<-bcf.next(fp))) {
+	# only write POS%10==0
+	if(variant.pos(vc)%%10==0) { 
+		# write variant
+		bcf.write.variant(out,vc);
+		}
+	}
+# dispose the vcf reader
+bcf.close(fp)
+# dispose the vcf rwriter
+bcf.close(out);
+```
+
+**Output**:
+
+```
+[1] TRUE
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##samtoolsVersion=1.3.1+htslib-1.3.1
+##samtoolsCommand=samtools mpileup -Ou -f rotavirus_rf.fa S1.bam S2.bam S3.bam S4.bam S5.bam
+##reference=file://rotavirus_rf.fa
+##contig=<ID=RF01,length=3302>
+##contig=<ID=RF02,length=2687>
+##contig=<ID=RF03,length=2592>
+##contig=<ID=RF04,length=2362>
+##contig=<ID=RF05,length=1579>
+##contig=<ID=RF06,length=1356>
+##contig=<ID=RF07,length=1074>
+##contig=<ID=RF08,length=1059>
+##contig=<ID=RF09,length=1062>
+##contig=<ID=RF10,length=751>
+##contig=<ID=RF11,length=666>
+##ALT=<ID=*,Description="Represents allele(s) other than observed.">
+##INFO=<ID=INDEL,Number=0,Type=Flag,Description="Indicates that the variant is an INDEL.">
+##INFO=<ID=IDV,Number=1,Type=Integer,Description="Maximum number of reads supporting an indel">
+##INFO=<ID=IMF,Number=1,Type=Float,Description="Maximum fraction of reads supporting an indel">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+##INFO=<ID=VDB,Number=1,Type=Float,Description="Variant Distance Bias for filtering splice-site(...)
+##INFO=<ID=RPB,Number=1,Type=Float,Description="Mann-Whitney U test of Read Position Bias (bigg(...)
+##INFO=<ID=MQB,Number=1,Type=Float,Description="Mann-Whitney U test of Mapping Quality Bias (bi(...)
+##INFO=<ID=BQB,Number=1,Type=Float,Description="Mann-Whitney U test of Base Quality Bias (bigge(...)
+##INFO=<ID=MQSB,Number=1,Type=Float,Description="Mann-Whitney U test of Mapping Quality vs Stra(...)
+##INFO=<ID=SGB,Number=1,Type=Float,Description="Segregation based metric.">
+##INFO=<ID=MQ0F,Number=1,Type=Float,Description="Fraction of MQ0 reads (smaller is better)">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="List of Phred-scaled genotype likelihoods">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##INFO=<ID=ICB,Number=1,Type=Float,Description="Inbreeding Coefficient Binomial test (bigger is(...)
+##INFO=<ID=HOB,Number=1,Type=Float,Description="Bias in the number of HOMs number (smaller is b(...)
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele count in genotypes for each ALT allele,(...)
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles in called genotypes">
+##INFO=<ID=DP4,Number=4,Type=Integer,Description="Number of high-quality ref-forward , ref-reve(...)
+##INFO=<ID=MQ,Number=1,Type=Integer,Description="Average mapping quality">
+##bcftools_callVersion=1.3-10-g820e1d6+htslib-1.2.1-267-g87141ea
+##bcftools_callCommand=call -vm -Oz -o rotavirus_rf.vcf.gz -
+##bcftools_viewVersion=1.10-6-g2782d9f+htslib-1.2.1-1336-g7c16b56-dirty
+##bcftools_viewCommand=view /home/lindenb/src/jvarkit/src/test/resources/rotavirus_rf.vcf.gz; D(...)
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	S1	S2	S3	S4	S5
+RF01	970	.	A	C	48.6696	.	DP=36;VDB=0.693968;SGB=10.3229;RPB=0.658863;MQB=1;MQSB=1;BQB=0.572843;(...)
+RF03	2150	.	T	A	6.90687	.	DP=37;VDB=0.557348;SGB=-1.00336;RPB=0.579851;MQB=1;MQSB=1;BQB=1;MQ0F=(...)
+RF04	1900	.	A	C	36.8224	.	DP=39;VDB=0.706942;SGB=7.10992;RPB=0.81363;MQB=1;MQSB=1;BQB=1;MQ0F=0;(...)
+RF04	1920	.	A	T	42.014	.	DP=39;VDB=0.966939;SGB=0.816387;RPB=0.864752;MQB=1;MQSB=1;BQB=0.864752(...)
 ```
 
 

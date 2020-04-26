@@ -38,7 +38,29 @@ bcf.close<-function(fp)
 	.Call("RBcfFileClose",fp);
 	}
 
-	
+
+#' Open a new VCF writer.
+#' Must be closed with bcf.close
+#' 
+#' @param fp the vcf reader
+#' @param fname the name of the output vcf file
+#' @return the writer or NULL on failure
+bcf.new.writer<-function(fp,fname="-")
+	{
+	.Call("RBcfNewWriter",fp,fname);
+	}
+
+#' Save a Variant in a VCF writer
+#' 
+#' @param fp the vcf reader
+#' @param vc the variant
+#' @return true on success
+bcf.write.variant<-function(fp,vc)
+	{
+	.Call("RBcfFileWriteCtx",fp,vc);
+	}
+
+
 bcf.nsamples<-function(fp)
 	{
 	.Call("RBcfNSamples",fp);

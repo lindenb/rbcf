@@ -60,7 +60,7 @@ typedef struct rbcffile_t
 	bcf1_t* tmp_ctx; // tmp variant ctx for reading
 	kstring_t tmp_line; // for reading line
 	int query_failed;
-
+	int is_writer;
 	}RBcfFile,*RBcfFilePtr;
 
 typedef struct array_of_strings {
@@ -77,8 +77,15 @@ static void trim(char *s) {
 	while(l>0 && *p && isspace(*p)) ++p, --l;
 
 	memmove(s, p, l + 1);
-	}	
+	}
 
+static int endsWith(const char *str, const char *suffix) {
+    if (str==NULL || suffix==NULL) return 0;
+    size_t lenstr = strlen(str);
+    size_t lensuffix = strlen(suffix);
+    if (lensuffix >  lenstr) return 0;
+    return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+    }
 
 #define MAKE_ARRAY_API(NAME,TYPE) \
 typedef struct NAME##array_t {\
@@ -214,6 +221,7 @@ SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx) {
 		goto die;
 		}
 	handler->query_failed = 0;
+	handler->is_writer = 0;
 	
 	handler->tmp_ctx = bcf_init1();
 	if(handler->tmp_ctx ==NULL) {
@@ -278,7 +286,7 @@ SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx) {
 	SET_VECTOR_ELT(ext, 0, sexpFile);
 	SET_VECTOR_ELT(ext, 1, sexpheader);
 	SET_VECTOR_ELT(ext, 2, Rfilename);
-    UNPROTECT(nprotect);
+    	UNPROTECT(nprotect);
 	return ext;
 	
 	die:
@@ -290,9 +298,103 @@ SEXP RBcfFileOpen(SEXP Rfilename,SEXP sexpRequireIdx) {
 	UNPROTECT(nprotect);
 	return R_NilValue;
 	}
+/**
+ * Open BCF file
+ */
+SEXP RBcfNewWriter(SEXP sexpIn,SEXP Rfilename) {
+	int nprotect=0;
+	RBcfFilePtr handler =  NULL;
+
+	PROTECT(sexpIn);nprotect++;
+	RBcfFilePtr p = (RBcfFilePtr)R_ExternalPtrAddr(VECTOR_ELT(sexpIn,0));
+	ASSERT_NOT_NULL(p);
+	SEXP sexpheader = VECTOR_ELT(sexpIn,1);
+	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(sexpheader);
+	ASSERT_NOT_NULL(hdr);
+
+	const char* filename= CHAR(asChar(Rfilename));
+	if(filename==NULL) {
+		LOG("Filename is null");
+		return R_NilValue;
+		}
+	
+	handler = (RBcfFilePtr)(Calloc(1UL,RBcfFile));
+	if(handler==NULL) {
+		BCF_WARNING("Out of memory");
+		goto die;
+		}
+	handler->query_failed = 0;
+	handler->is_writer = 1;
+	
+	char modew[8];
+	strcpy(modew, "w");
+
+	if(endsWith(filename,".bcf")) strcat(modew, "b"); // uncompressed BCF
+	else if(endsWith(filename,".gz") || endsWith(filename,".vcfz")) strcat(modew, "z");// compressed VCF
+    	
+	handler->fp = hts_open(filename,modew);
+	if (handler->fp==NULL) {
+		BCF_WARNING("Failed to open writer %s.\n",filename);
+		goto die;
+		}
+
+	if ( bcf_hdr_write(handler->fp,hdr)!=0 ) {
+		BCF_WARNING("Failed to write header for writer %s.\n",filename);
+		goto die;
+		}
+
+	SEXP sexpFile = PROTECT(R_MakeExternalPtr(handler, R_NilValue, R_NilValue));nprotect++;
+	R_RegisterCFinalizerEx(sexpFile,RBcfFileFinalizer, TRUE);
+	
+	SEXP ext = PROTECT(allocVector(VECSXP, 3));nprotect++;
+	SET_VECTOR_ELT(ext, 0, sexpFile);
+	SET_VECTOR_ELT(ext, 1, sexpheader);
+	SET_VECTOR_ELT(ext, 2, Rfilename);
+    	UNPROTECT(nprotect);
+	return ext;
 
 
+	die:
+		BCF_WARNING("error opening writer");
+		if(handler!=NULL) {
+			RBcfFileFree(handler);
+			}
+		if(hdr!=NULL) bcf_hdr_destroy(hdr);
+	UNPROTECT(nprotect);
+	return R_NilValue;
+	}
 
+/**
+ * Write variant to output vcf
+ */
+SEXP RBcfFileWriteCtx(SEXP sexpOut,SEXP sexpCtx) {
+	int nprotect=0;
+	PROTECT(sexpOut);nprotect++;
+	PROTECT(sexpCtx);nprotect++;
+	RBcfFilePtr p = (RBcfFilePtr)R_ExternalPtrAddr(VECTOR_ELT(sexpOut,0));
+	ASSERT_NOT_NULL(p);
+	bcf_hdr_t* hdr1 = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpOut,1));
+
+
+	if(p->is_writer!=1) {
+		BCF_WARNING("Cannot save to a reader");
+		UNPROTECT(nprotect);
+		return ScalarLogical(0);
+		}
+
+	bcf_hdr_t* hdr2 = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+
+	if(hdr1!=hdr2) {
+		BCF_WARNING("header from reader is not the same as writer.");
+		UNPROTECT(nprotect);
+		return ScalarLogical(0);
+		}
+
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	int ret = bcf_write1(p->fp, hdr2, ctx);
+	UNPROTECT(nprotect);
+	return ScalarLogical(ret==0);
+	}
 
 SEXP RBcfSeqNames(SEXP sexpFile) {
 	int i, n=0;
@@ -604,9 +706,15 @@ SEXP RBcfQueryRegion(SEXP sexpFile,SEXP sexpInterval) {
 	const char* filename  = CHAR(asChar(VECTOR_ELT(sexpFile,2)));
 	
 	const char* interval= CHAR(asChar(sexpInterval));
-	
-	
 	ASSERT_NOT_NULL(interval);
+
+	if( ptr->is_writer == 1 ) {
+		BCF_WARNING("cannot query a writer");
+		UNPROTECT(nprotect);
+		return ScalarLogical(0);
+		}	
+
+
 	if(ptr->itr) hts_itr_destroy(ptr->itr);
 	ptr->itr = NULL;
 	ptr->query_failed=0;
@@ -642,6 +750,7 @@ SEXP RBcfNextLine(SEXP sexpFile) {
 	int nprotect=0;
 	bcf1_t *line = NULL;
 	
+
 	SEXP ext;
 	PROTECT(sexpFile);nprotect++;
 	RBcfFilePtr reader=(RBcfFilePtr)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,0));
@@ -649,6 +758,12 @@ SEXP RBcfNextLine(SEXP sexpFile) {
 	bcf_hdr_t* hdr =(bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpFile,1));
 	ASSERT_NOT_NULL(hdr);
 	
+	if( reader->is_writer == 1 ) {
+		BCF_WARNING("try to read from a writer");
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+
 	if( reader->query_failed!=0) {
 		line=NULL;
 		}

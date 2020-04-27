@@ -2,14 +2,10 @@
 \alias{bcf.dictionary}
 \title{bcf.dictionary}
 \usage{bcf.dictionary(fp)}
-\description{get dictionary from a VCF reader.}
-\value{@return the vcf dictionary as a table}
-\arguments{
-	\item{fp}{the vcf reader}
-}
-\examples{
+\description{get dictionary from a VCF reader.
 
-fp<-bcf.open("my.vcf.gz",T)
+
+fp<-bcf.open("my.vcf.gz",TRUE)
 dict<-bcf.dictionary(fp)
 print(dict)
 chrom size
@@ -24,5 +20,8 @@ RF08  RF08 1059
 RF09  RF09 1062
 RF10  RF10  751
 RF11  RF11  666
-
+}
+\value{@return the vcf dictionary as a table}
+\arguments{
+	\item{fp}{the vcf reader}
 }

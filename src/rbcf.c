@@ -166,19 +166,21 @@ static void RBcfFileFree(final RBcfFilePtr ptr) {
 	if ( ptr->itr ) hts_itr_destroy(ptr->itr);
 	if ( ptr->tbx ) tbx_destroy(ptr->tbx);
     if ( ptr->idx ) hts_idx_destroy(ptr->idx);
-	if ( ptr->fp ) hts_close(ptr->fp);	
+	if ( ptr->fp ) hts_close(ptr->fp);
 	Free(ptr);
 	}
 
 /**
- * Close resources associated 
+ * Close resources associated
  */
 SEXP RBcfFileClose(SEXP sexpFile) {
 	PROTECT(sexpFile);
-	SEXP fp = VECTOR_ELT(sexpFile,0);
-	RBcfFilePtr p = (RBcfFilePtr)R_ExternalPtrAddr(fp);
-	RBcfFileFree(p);
-	R_ClearExternalPtr(fp);
+	if(sexpFile!=R_NilValue) {
+		SEXP fp = VECTOR_ELT(sexpFile,0);
+		RBcfFilePtr p = (RBcfFilePtr)R_ExternalPtrAddr(fp);
+		RBcfFileFree(p);
+		R_ClearExternalPtr(fp);
+	}
 	SEXP ext= ScalarLogical(1);
 	UNPROTECT(1);
 	return ext;

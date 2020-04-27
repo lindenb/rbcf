@@ -14,10 +14,7 @@ git clone "https://github.com/lindenb/rbcf"
 
 cd rbcf
 
-# if needed
-make uninstall
-
-make install
+make
 ```
 
 ## Author
@@ -43,7 +40,7 @@ paste("RBCF:",rcbf.version())
 **Output**:
 
 ```
-[1] "HTSLIB: 1.10.2"
+[1] "HTSLIB: 1.10.2-dirty"
 [1] "RBCF: 0.0-1"
 ```
 

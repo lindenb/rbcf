@@ -3,7 +3,8 @@
 \title{bcf.query}
 \usage{bcf.query(fp,interval,collect=FALSE)}
 \description{prepare the VCF reader for a new vcf iteration over a given interval.
-VCF reader must be associated and opened with a valid index.}
+VCF reader must be associated and opened with a valid index.
+}
 \value{@return TRUE on success or a list of variant if collect=TRUE}
 \arguments{
 	\item{fp}{the vcf reader}

@@ -14,6 +14,9 @@ install: build
 install2:
 	(cd .. && R CMD INSTALL $(NAME))
 
+check:
+	R CMD check --as-cran .
+
 uninstall:
 	R CMD REMOVE $(NAME) || true
 

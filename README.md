@@ -40,7 +40,7 @@ paste("RBCF:",rcbf.version())
 **Output**:
 
 ```
-[1] "HTSLIB: 1.10.2-dirty"
+[1] "HTSLIB: 1.10.2"
 [1] "RBCF: 0.0-1"
 ```
 

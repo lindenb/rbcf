@@ -3,7 +3,7 @@ HTSDIR=htslib
 OBJECTS=rbcf.o $(HTSDIR)/libhts.a
 PKG_CFLAGS=
 PKG_CPPFLAGS+=-I$(HTSDIR) -I. -Wall
-PKG_LIBS+=-L$(HTSDIR) -lcurl
+PKG_LIBS+=-L$(HTSDIR) -lcurl -lssl -lcrypto
 
 all:  $(SHLIB)
 

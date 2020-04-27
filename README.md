@@ -54,6 +54,8 @@ paste("RBCF:",rcbf.version())
 library(rbcf)
 # we don't need the index for this file
 fp <- bcf.open("./data/rotavirus_rf.01.vcf",FALSE)
+# error (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 # dispose the vcf reader
 bcf.close(fp)
 print("Done.")
@@ -77,6 +79,9 @@ print("Done.")
 library(rbcf)
 # we don't need the index for this file
 fp <- bcf.open("./data/rotavirus_rf.01.vcf",FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
+# print INFO
 bcf.infos(fp)
 # dispose the vcf reader
 bcf.close(fp)
@@ -135,6 +140,9 @@ MQ                                                                         "Aver
 library(rbcf)
 # we don't need the index for this file
 fp <- bcf.open("./data/rotavirus_rf.01.vcf",FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
+# print FORMAT
 bcf.formats(fp)
 # dispose the vcf reader
 bcf.close(fp)
@@ -159,6 +167,9 @@ GT GT      1  String                                  "Genotype"
 library(rbcf)
 # we don't need the index for this file
 fp <- bcf.open("./data/gnomad.exomes.r2.0.1.sites.bcf",FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
+# print FILTERs
 bcf.filters(fp)
 # dispose the vcf reader
 bcf.close(fp)
@@ -196,6 +207,8 @@ SEGDUP                                                                          
 library(rbcf)
 # we don't need the index for this file
 fp <- bcf.open("./data/rotavirus_rf.01.vcf",FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 # print the number of samples
 paste("Number of samples:",bcf.nsamples(fp))
 # get the name for the 1st sample
@@ -229,6 +242,9 @@ bcf.close(fp)
 library(rbcf)
 # we don't need the index for this file
 fp <- bcf.open("./data/rotavirus_rf.01.vcf",FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
+# print the dictionary
 bcf.dictionary(fp)
 # dispose the vcf reader
 bcf.close(fp)
@@ -263,6 +279,8 @@ RF11  RF11  666
 library(rbcf)
 # Open the indexed VCF
 fp <- bcf.open("./data/rotavirus_rf.02.vcf.gz")
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 # get the indexed contigs
 bcf.contigs(fp)
 # dispose the vcf reader
@@ -291,6 +309,8 @@ library(rbcf)
 count.variants<-function(filename) {
 	# we don't need the index for this file
 	fp <- bcf.open(filename,FALSE)
+	# error on opening
+	if(is.null(fp)) return(-1)
 	# number of variants
 	n<-0
 	# loop while we can read a variant
@@ -341,6 +361,8 @@ library(rbcf)
 count.variants<-function(filename,predicate) {
 	# we don't need the index for this file
 	fp <- bcf.open(filename,FALSE)
+	# error on opening
+	if(is.null(fp)) return(-1)
 	# number of variants
 	n<-0
 	# loop while we can read a variant
@@ -436,6 +458,8 @@ library(rbcf)
 filename <- "./data/gnomad.exomes.r2.0.1.sites.bcf"
 # we don't need the index for this file
 fp <- bcf.open(filename,FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 # current variant
 vc <- NULL
 while(!is.null(vc<-bcf.next(fp))) {
@@ -681,6 +705,8 @@ library(rbcf)
 filename <- "./data/rotavirus_rf.ann.vcf.gz"
 # we don't need the index for this file
 fp <- bcf.open(filename,FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 # current variant
 vc <- NULL
 while(!is.null(vc<-bcf.next(fp))) {
@@ -724,6 +750,8 @@ library(rbcf)
 count.variants<-function(filename,intervals) {
 	# open the indexed VCF
 	fp <- bcf.open(filename)
+	# error on opening
+	if(is.null(fp)) return(-1)
 	# loop over the intervals
 	for(interval in intervals) {
 		# try query the interval
@@ -798,6 +826,9 @@ find.variant<-function(fp,contig,pos) {
 filename<-"./data/gnomad.exomes.r2.0.1.sites.bcf"
 # open the VCF with index
 fp <- bcf.open(filename)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
+
 ctx <-find.variant(fp,"1",905608)
 stopifnot(variant.has.attribute(ctx,"CSQ"))
 print(paste("CSQ(no split) ",variant.string.attribute(ctx,"CSQ",split=FALSE)))
@@ -861,6 +892,8 @@ find.variant<-function(fp,contig,pos) {
 filename<-"./data/1000G.ALL.2of4intersection.20100804.genotypes.bcf"
 # open the VCF with index
 fp <- bcf.open(filename)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 # find a variant
 ctx <-find.variant(fp,"1",10583)
 print(paste("Number of genotypes ",variant.nsamples(ctx)))
@@ -935,8 +968,14 @@ filenamein = "./data/rotavirus_rf.01.vcf"
 filenameout =  "-"
 
 fp <- bcf.open(filenamein,FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
+
 # create a new VCF writer using the header from 'fp'
-out <- bcf.new.writer(fp,filenameout);
+out <- bcf.new.writer(fp,filenameout)
+# error on opening (exit 0 for tests)
+if(is.null(out)) quit(save="no",status=0,runLast=FALSE)
+
 # loop while we can read a variant
 while(!is.null(vc<-bcf.next(fp))) {
 	# only write POS%10==0

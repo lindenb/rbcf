@@ -1,12 +1,12 @@
 Package: rbcf
-Version: 0.0-9
+Version: 0.0-15
 Date: 2020-04-27
-Title: RBcf
+Title: vcf and bcf processing
 Author: Pierre Lindenbaum <plindenbaum@yahoo.fr>
 Maintainer: Pierre Lindenbaum  <plindenbaum@yahoo.fr>
 Depends: R (>= 3.0.0)
-Description: C Bindings to htslib (https://github.com/samtools/htslib)  for reading Bcf/Vcf files.
-     The package contains a set of functions to open/close/scan/query a VCF/BCF file, as well a
+Description: C Bindings to htslib (<https://github.com/samtools/htslib>)  for reading vcf/bcf files.
+     The package contains a set of functions to open/close/scan/query a vcf/bcf file, as well a
      some functions to extract data from variants and genotypes.
      The package is working although it might evolve in the future ( nature of the returned object, names of the functions, etc...).
      I also need to improve the tests and the documentation.

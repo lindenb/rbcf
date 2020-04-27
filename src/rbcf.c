@@ -1481,7 +1481,7 @@ SEXP VariantVepTable(SEXP sexpCtx) {
 			}
 		FreeTokensPtr(components);
 		//set name for this row
-		char tmp[10];
+		char tmp[20];
 		sprintf(tmp,"%d",(y+1));
 		SET_STRING_ELT(rowNames, y, mkChar(tmp));
 
@@ -1586,7 +1586,7 @@ SEXP VariantSnpEffTable(SEXP sexpCtx) {
 			}
 		FreeTokensPtr(components);
 		//set name for this row
-		char tmp[10];
+		char tmp[20];
 		sprintf(tmp,"%d",(y+1));
 		SET_STRING_ELT(rowNames, y, mkChar(tmp));
 

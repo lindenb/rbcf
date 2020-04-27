@@ -19,12 +19,11 @@ rbcf_version.h:
 
 
 $(HTSDIR)/libhts.so $(HTSDIR)/libhts.a $(HTSLIB)/version.h : $(HTSDIR)/Makefile
-	cd $(HTSDIR) && ./configure && $(MAKE) $(notdir $@)
+	cd $(HTSDIR) && ./configure && sed -i '/^CFLAGS/s/$$/ -fPIC/' Makefile && $(MAKE) $(notdir $@)
 
 	
 $(HTSDIR)/Makefile:
-	test -f $@ || (wget https://github.com/samtools/htslib/releases/download/1.10.2/htslib-1.10.2.tar.bz2 && tar xf htslib-1.10.2.tar.bz2 && mv htslib-1.10.2 htslib)
-	sed -i '/^CFLAGS/s/$$/ -fPIC/' $@
+	test -f $@ || (wget https://github.com/samtools/htslib/releases/download/1.10.2/htslib-1.10.2.tar.bz2 && tar xf htslib-1.10.2.tar.bz2 && mv htslib-1.10.2 $(HTSDIR))
 
 clean:
 	rm -f librbcf.so

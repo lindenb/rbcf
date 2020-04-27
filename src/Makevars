@@ -19,7 +19,7 @@ rbcf_version.h:
 
 
 $(HTSDIR)/libhts.so $(HTSDIR)/libhts.a $(HTSLIB)/version.h : $(HTSDIR)/Makefile
-	cd $(HTSDIR) && ./configure && sed -i '/^CFLAGS/s/$$/ -fPIC/' Makefile && $(MAKE) $(notdir $@)
+	cd $(HTSDIR) && ./configure && sed -i '/^CFLAGS/s/$$/ -fPIC/' config.mk && $(MAKE) $(notdir $@)
 
 	
 $(HTSDIR)/Makefile:

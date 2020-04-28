@@ -73,3 +73,5 @@ mv -v tmp.pdf ../doc/rbcf_examples.pdf
 rm -v tmp.tex
 
 mv -v tmp.md  ../README.md
+
+rm -v -f tmp.log tmp.out tmp.aux

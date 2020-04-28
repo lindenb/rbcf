@@ -14,6 +14,9 @@ find.variant<-function(fp,contig,pos) {
 filename<-"./data/gnomad.exomes.r2.0.1.sites.bcf"
 # open the VCF with index
 fp <- bcf.open(filename)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
+
 ctx <-find.variant(fp,"1",905608)
 stopifnot(variant.has.attribute(ctx,"CSQ"))
 print(paste("CSQ(no split) ",variant.string.attribute(ctx,"CSQ",split=FALSE)))

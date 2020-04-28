@@ -6,6 +6,8 @@ library(rbcf)
 count.variants<-function(filename,intervals) {
 	# open the indexed VCF
 	fp <- bcf.open(filename)
+	# error on opening
+	if(is.null(fp)) return(-1)
 	# loop over the intervals
 	for(interval in intervals) {
 		# try query the interval

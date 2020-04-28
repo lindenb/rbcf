@@ -1,4 +1,3 @@
-
 #' @return the version of htslib
 htslib.version <-function()  {
 	.Call("HtslibGetVersion");
@@ -11,13 +10,14 @@ rcbf.version <-function()  {
 
 #' Open a VCF or a BCF file
 #' 
+#' fp<-bcf.open("my.vcf.gz",TRUE)
+#' hts.close(fp)
+#' fp<-bcf.open("my.bcf")
+#' hts.close(fp)
+#' 
 #' @param filename the path to the vcf file
 #' @param requireIndex load associated vcf index
 #' @return the new VCF reader
-#' @examples
-#' 
-#' bcf.open("my.vcf.gz",T)
-#' bcf.open("my.bcf")
 bcf.open<-function(filename,requireIndex=TRUE)
 	{
 	stopifnot(is.character(filename))
@@ -27,15 +27,14 @@ bcf.open<-function(filename,requireIndex=TRUE)
 
 #' Close a VCF reader
 #' 
+#' fp<-bcf.open("my.vcf.gz",TRUE)
+#' bcf.close(fp)
+#' 
 #' @param fp the vcf reader
 #' @return true on success
-#' @examples
-#' 
-#' fp<-bcf.open("my.vcf.gz",T)
-#' bcf.close(fp)
 bcf.close<-function(fp)
 	{
-	.Call("RBcfFileClose",fp);
+	if(!is.null(fp)) .Call("RBcfFileClose",fp);
 	}
 
 
@@ -60,12 +59,15 @@ bcf.write.variant<-function(fp,vc)
 	.Call("RBcfFileWriteCtx",fp,vc);
 	}
 
-
+#' @param fp the vcf reader
+#' @return the number of samples
 bcf.nsamples<-function(fp)
 	{
 	.Call("RBcfNSamples",fp);
 	}
 
+#' @param fp the vcf reader
+#' @return samples
 bcf.samples<-function(fp)
 	{
 	.Call("RBcfSamples",fp);
@@ -96,6 +98,7 @@ bcf.contigs<-function(fp)
 	}
 
 #' @param fp the vcf reader
+#' @param idx the 1-based index
 #' @return the idx-th sample (1-based)
 bcf.sample.at<-function(fp,idx)
 	{
@@ -105,24 +108,20 @@ bcf.sample.at<-function(fp,idx)
 
 #' Close a VCF reader
 #' 
+#' fp<-bcf.open("my.vcf.gz",TRUE)
+#' bcf.close(fp)
+#'
 #' @param fp the vcf reader
 #' @return true on success
-#' @examples
-#' 
-#' fp<-bcf.open("my.vcf.gz",T)
-#' bcf.close(fp)
 bcf.close<-function(fp)
 	{
 	.Call("RBcfFileClose",fp);
 	}
 
 #' get dictionary from a VCF reader.
+#'
 #' 
-#' @param fp the vcf reader
-#' @return the vcf dictionary as a table
-#' @examples
-#' 
-#' fp<-bcf.open("my.vcf.gz",T)
+#' fp<-bcf.open("my.vcf.gz",TRUE)
 #' dict<-bcf.dictionary(fp)
 #' print(dict)
 #'      chrom size
@@ -137,6 +136,9 @@ bcf.close<-function(fp)
 #' RF09  RF09 1062
 #' RF10  RF10  751
 #' RF11  RF11  666
+#' 
+#' @param fp the vcf reader
+#' @return the vcf dictionary as a table
 bcf.dictionary<-function(fp)
 	{
 	.Call("RBcfHeaderDict",fp);
@@ -150,7 +152,7 @@ bcf.dictionary<-function(fp)
 #' @param interval the genomic interval to be scanned
 #' @param collect if TRUE return a list of variants in the region or NULL on failure
 #' @return TRUE on success or a list of variant if collect=TRUE
-#' @examples
+#' 
 bcf.query<-function(fp,interval,collect=FALSE) {
 	stopifnot(is.character(interval))
 	ret<-.Call("RBcfQueryRegion",fp,interval);
@@ -173,15 +175,16 @@ bcf.query<-function(fp,interval,collect=FALSE) {
 	
 #' read the next Variant Context in the VCF reader
 #' 
-#' @param fp the vcf reader
-#' @return an opaque vcf context or NULL 
-#' @examples
+#' 
 #' fp <- bcf.open("in.vcf.gz")
 #' bcf.query(fp,"RF02:1-1000")
 #' while(!is.null(vc<-bcf.next(fp))) {
 #'      ## do something with vc
 #'      }
 #' bcf.close(fp)
+#'
+#' @param fp the vcf reader
+#' @return an opaque vcf context or NULL 
 #
 bcf.next<-function(fp) {
 	.Call("RBcfNextLine",fp);
@@ -391,8 +394,8 @@ variant.genotypes <-function(vc) {
 #' return the genotype for a variant
 #' 
 #' @param vc the variant
-#' @param sn the sample name (slower) or the 1-based sample index 
-#' @return max ploidy
+#' @param nameOrIdx the sample name (slower) or the 1-based sample index 
+#' @return the given genotype
 #
 variant.genotype<-function(vc,nameOrIdx) {
 	if(is.numeric(nameOrIdx)) {
@@ -496,7 +499,7 @@ variant.has.attribute <-function(vc,att) {
 
 #' @param vc the variant
 #' @param att the INFO/Attribute
-#' @param splitString split strings using commas
+#' @param split split strings using commas
 #' @return the the INFO attribute for the given key.
 variant.string.attribute <-function(vc,att, split = TRUE) {
 	stopifnot(is.character(att))
@@ -507,12 +510,23 @@ variant.string.attribute <-function(vc,att, split = TRUE) {
 	s
 	}
 
+#' @param vc the variant
+#' @param att the INFO/Attribute
+#' @return the the INFO attribute for the given key.
 variant.int.attribute <-function(vc,att) {
 	.Call("VariantIntAttribute",vc,att)
 	}
+
+#' @param vc the variant
+#' @param att the INFO/Attribute
+#' @return the the INFO attribute for the given key.
 variant.float.attribute <-function(vc,att) {
 	.Call("VariantFloatAttribute",vc,att)
 	}
+
+#' @param vc the variant
+#' @param att the INFO/Attribute
+#' @return the the INFO attribute for the given key.
 variant.flag.attribute <-function(vc,att) {
 	.Call("VariantFlagAttribute",vc,att)
 	}
@@ -597,42 +611,52 @@ genotype.string.attribute <-function(gt,att) {
 #' @return TRUE if genotype is filtered (FORMAT/FT is set)
 #
 genotype.filtered <-function(gt) {
-	flt<- genotype.string.attribute(g,"FT")
+	flt<- genotype.string.attribute(gt,"FT")
 	!(is.null(flt) || length(flt)==0 || flt==".")
 	}
 
 #' @param gt the genotype
-#' @param att the key
 #' @return the DP or -1
-#
 genotype.dp <-function(gt) {
 	v<-genotype.int.attribute(gt,"DP")
 	if(length(v)!=1) return(-1)
 	v[1]	
 	}
+#' @param gt the genotype
+#' @return TRUE if DP is available 
 genotype.has.dp <-function(gt) {
 	genotype.dp(gt)>=0	
 	}
+#' @param gt the genotype
+#' @return the GQ
 genotype.gq <-function(gt) {
 	v<-genotype.int.attribute(gt,"GQ")
 	if(length(v)!=1) return(-1)
 	v[1]	
 	}
+#' @param gt the genotype
+#' @return TRUE if GQ is available 
 genotype.has.gq <-function(gt) {
 	genotype.gq(gt)>=0	
 	}
+#' @param gt the genotype
 #' @return PL or empty vector
 genotype.pl <-function(gt) {
 	genotype.int.attribute(gt,"PL")
 	}
+#' @param gt the genotype
 #' @return TRUE if PL is available 
 genotype.has.pl<-function(gt) {
 	length(genotype.pl(gt))>0	
 	}
+
+#' @param gt the genotype
 #' @return AD or rempty vector
 genotype.ad <-function(gt) {
 	genotype.int.attribute(gt,"AD")
 	}
+
+#' @param gt the genotype
 #' @return TRUE if AD is available 
 genotype.has.ad <-function(gt) {
 	length(genotype.ad(gt))>0	

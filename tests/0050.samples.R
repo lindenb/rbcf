@@ -4,6 +4,8 @@
 library(rbcf)
 # we don't need the index for this file
 fp <- bcf.open("./data/rotavirus_rf.01.vcf",FALSE)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 # print the number of samples
 paste("Number of samples:",bcf.nsamples(fp))
 # get the name for the 1st sample

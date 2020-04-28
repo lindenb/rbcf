@@ -1275,6 +1275,96 @@ SEXP RBcfCtxVariantGtAllelesIndexes0(SEXP sexpGt) {
 	return ext;
 	}
 
+SEXP RBcfCtxVariantAllGtAllelesIndexes0(SEXP sexpCtx) {
+	int nprotect=0;
+	int i,j,k;
+	PROTECT(sexpCtx);nprotect++;
+	
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	
+	// Total number of samples
+	int nsmpl = bcf_hdr_nsamples(hdr);
+
+	// Identify the max-ploidy
+	int32_t *gt_arr = NULL, ngt_arr = 0;
+	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+	int max_ploidy = 0;
+	if ( ngt > 0 ) {
+		max_ploidy = ngt / nsmpl;
+	}
+  
+	SEXP ext = PROTECT(allocVector(INTSXP,ngt));nprotect++;	
+
+	for (i=0; i < nsmpl; i ++) {
+		for (j=0; j<max_ploidy; j++) {
+		  k = i * max_ploidy + j;
+		  // if true, the sample has smaller ploidy
+		  if (gt_arr[k]==bcf_int32_vector_end ) {
+		     INTEGER(ext)[k] = -2;
+		  }
+		  else if ( bcf_gt_is_missing(gt_arr[k]) ) {
+		    INTEGER(ext)[k] = -1;
+		  } else {
+		    INTEGER(ext)[k] = bcf_gt_allele(gt_arr[k]);
+		  }
+		}
+   }
+
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
+	int nprotect=0;
+	int i,j,k;
+	PROTECT(sexpCtx);nprotect++;
+	
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	
+	// Total number of samples
+	int nsmpl = bcf_hdr_nsamples(hdr);
+
+	// Identify the max-ploidy
+	int32_t *gt_arr = NULL, ngt_arr = 0;
+	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+	int max_ploidy = 0;
+	if ( ngt > 0 ) {
+		max_ploidy = ngt / nsmpl;
+	}
+	char *buf = malloc(max_ploidy * 2 * sizeof(char));
+  
+	SEXP ext = PROTECT(allocVector(STRSXP,nsmpl));nprotect++;
+
+	for (i=0; i < nsmpl; i ++) {
+		for (j=0; j<max_ploidy; j++) {
+		  k = i * max_ploidy + j;
+		  // if true, the sample has smaller ploidy
+		  if (gt_arr[k]==bcf_int32_vector_end ) {
+		     buf[j*2] = '.';
+		  }
+		  else if ( bcf_gt_is_missing(gt_arr[k]) ) {
+		     buf[j*2] = '.';
+		  } else {
+				sprintf(buf + (j*2), "%d", bcf_gt_allele(gt_arr[k]));
+		  }
+		  if (j + 1 >= max_ploidy) {
+					 buf[j*2 + 1] = '\0';
+		  } else if (bcf_gt_is_phased(gt_arr[k]) ){
+					 buf[j*2 + 1] = '|';
+			} else {
+					 buf[j*2 + 1] = '/';
+		  }
+		}
+		SET_STRING_ELT(ext, i, mkChar(buf));
+   }
+	free(buf);
+
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
 SEXP GenotypeSample(SEXP sexpGt) {
         int nprotect=0;
 	SEXP ext;
@@ -1814,6 +1904,134 @@ SEXP GenotypeFloatAttribute(SEXP sexpGt,SEXP sexpatt) {
 			}
 		free(dst);
 		}
+
+	SEXP ext = PROTECT(allocVector(REALSXP,array->size));nprotect++;	
+ 	for(int i=0;i< array->size;i++) {
+	       	REAL(ext)[i] = array->data[i];
+		}
+
+	FloatArrayFree(array);
+	
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+
+SEXP VariantGenotypesFlagAttribute(SEXP sexpCtx,SEXP sexpatt) {
+	int nprotect=0;
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	ASSERT_NOT_NULL(att);
+	Int32ArrayPtr array = Int32ArrayNew();
+
+
+	bcf_unpack(ctx, BCF_UN_FMT);
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+
+	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		int ndst=0;
+		int32_t* dst=NULL;
+		int ret=bcf_get_format_int32(hdr,ctx,att,(void**)&dst,&ndst);
+		if(ret>=0 && dst!=NULL ) {
+			for (int j=0; j< ndst; j++) {
+			    int32_t val=dst[j];
+			    if(val==bcf_int32_vector_end ) break;
+			    //IGNORE if(val==bcf_float_missing ) call->qsum[j] = 0;
+			    Int32ArrayPush(array,val == 0 ? 0 : 1);
+			}
+		}
+		free(dst);
+	}
+
+	SEXP ext = PROTECT(allocVector(INTSXP,array->size));nprotect++;	
+ 	for(int i=0;i< array->size;i++) {
+	       	INTEGER(ext)[i] = array->data[i];
+		}
+
+	Int32ArrayFree(array);
+	
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+
+SEXP VariantGenotypesInt32Attribute(SEXP sexpCtx,SEXP sexpatt) {
+	int nprotect=0;
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	ASSERT_NOT_NULL(att);
+	Int32ArrayPtr array = Int32ArrayNew();
+
+
+	bcf_unpack(ctx, BCF_UN_FMT);
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+	
+
+	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		int ndst=0;
+		int32_t* dst=NULL;
+		int ret=bcf_get_format_int32(hdr,ctx,att,(void**)&dst,&ndst);
+		if(ret>=0 && dst!=NULL ) {
+			for (int j=0; j< ndst; j++) {
+			    int32_t val=dst[j];
+			    if(val==bcf_int32_vector_end ) break;
+			    //IGNORE if(val==bcf_float_missing ) call->qsum[j] = 0;
+			    Int32ArrayPush(array,val);
+			}
+		}
+		free(dst);
+	}
+
+	SEXP ext = PROTECT(allocVector(INTSXP,array->size));nprotect++;	
+ 	for(int i=0;i< array->size;i++) {
+	       	INTEGER(ext)[i] = array->data[i];
+		}
+
+	Int32ArrayFree(array);
+	
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
+
+SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
+	int nprotect=0;
+	PROTECT(sexpCtx);nprotect++;
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	const char* att = CHAR(asChar(sexpatt));
+	ASSERT_NOT_NULL(ctx);
+	ASSERT_NOT_NULL(hdr);
+	ASSERT_NOT_NULL(att);
+	FloatArrayPtr array = FloatArrayNew();
+
+
+	bcf_unpack(ctx, BCF_UN_FMT);
+	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+	
+
+	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		int ndst=0;
+		float* dst=NULL;
+		int ret=bcf_get_format_float(hdr,ctx,att,(void**)&dst,&ndst);
+		if(ret>=0 && dst!=NULL ) {
+			for (int j=0; j< ndst; j++) {
+			    float val=dst[j];
+			    if(val==bcf_float_vector_end ) break;
+			    //IGNORE if(val==bcf_float_missing ) call->qsum[j] = 0;
+			    FloatArrayPush(array,val);
+			}
+		}
+		free(dst);
+	}
 
 	SEXP ext = PROTECT(allocVector(REALSXP,array->size));nprotect++;	
  	for(int i=0;i< array->size;i++) {

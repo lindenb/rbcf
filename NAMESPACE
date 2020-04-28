@@ -72,4 +72,8 @@ export(genotype.int.attribute)
 export(genotype.float.attribute)
 export(genotype.string.attribute)
 export(genotype.filtered)
+export(variant.genotypes.flag.attribute)
+export(variant.genotypes.int.attribute)
+export(variant.genotypes.float.attribute)
+export(variant.genotypes.alleles.idx0)
 

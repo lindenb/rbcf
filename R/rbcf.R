@@ -414,6 +414,13 @@ genotype.alleles.idx0 <-function(gt) {
 	.Call("RBcfCtxVariantGtAllelesIndexes0",gt);
 	}
 
+variant.genotypes.alleles.idx0 <-function(vc) {
+	.Call("RBcfCtxVariantAllGtAllelesIndexes0", vc);
+	}
+
+variant.genotypes.allele.strings <-function(vc) {
+	.Call("RBcfCtxVariantAllGtStrings", vc);
+	}
 
 #' @param gt the genotype
 #' @return the number of alleles for the genotypes
@@ -551,6 +558,23 @@ variant.snpeff <-function(vc) {
 	.Call("VariantSnpEffTable",vc)
 	}
 
+#' @param vc the variant
+#' @return vector of numerics containing attribute values for all genotypes
+variant.genotypes.flag.attribute <- function(vc, att) {
+	.Call("VariantGenotypesFlagAttribute", vc, att)
+}
+
+#' @param vc the variant
+#' @return vector of numerics containing attribute values for all genotypes
+variant.genotypes.int.attribute <- function(vc, att) {
+	.Call("VariantGenotypesInt32Attribute", vc, att)
+}
+
+#' @param vc the variant
+#' @return vector of numerics containing attribute values for all genotypes
+variant.genotypes.float.attribute <- function(vc, att) {
+	.Call("VariantGenotypesFloatAttribute", vc, att)
+}
 
 #' @param gt the genotype
 #' @param att the key

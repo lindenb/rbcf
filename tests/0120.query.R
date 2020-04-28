@@ -36,7 +36,8 @@ count.variants("./data/1000G.ALL.2of4intersection.20100804.genotypes.bcf",some_i
 
 # another way to query is set collect=TRUE to return a vector of variant
 fp <- bcf.open("./data/rotavirus_rf.02.vcf.gz")
-print(paste("Number of variants using collect:",length(bcf.query(fp,"RF03",collect=TRUE))))
-bcf.close(fp)
-
+if(!is.null(fp)) {
+	print(paste("Number of variants using collect:",length(bcf.query(fp,"RF03",collect=TRUE))))
+	bcf.close(fp)
+	}
 

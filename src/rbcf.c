@@ -643,7 +643,7 @@ SEXP RBcfHeaderDict(SEXP sexpFile) {
 	int dict_size=  hdr->n[BCF_DT_CTG];
 	PROTECT(res = Rf_allocVector(VECSXP,2));nprotect++;
 	PROTECT(vChrom = Rf_allocVector(STRSXP,dict_size)); nprotect++;
-   	PROTECT(vSize = Rf_allocVector(VECSXP, dict_size)); nprotect++;
+  PROTECT(vSize = Rf_allocVector(VECSXP, dict_size)); nprotect++;
 	PROTECT(vRowNames = Rf_allocVector(STRSXP, dict_size)); nprotect++;
 	
 	for (i=0; i< dict_size; i++) {
@@ -653,7 +653,7 @@ SEXP RBcfHeaderDict(SEXP sexpFile) {
 		SET_STRING_ELT(vRowNames, i,  mkChar(chrom_name) );
 		int len = hdr->id[BCF_DT_CTG][i].val->info[0];
 		SET_VECTOR_ELT(vSize, i, ScalarInteger(len) );
-	    }
+	}
 
 	
 	/* set the columns of the table */

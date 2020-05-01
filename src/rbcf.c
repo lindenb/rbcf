@@ -1400,24 +1400,30 @@ SEXP RBcfCtxVariantAllGtAllelesIndexes0(SEXP sexpCtx) {
 	// Identify the max-ploidy
 	int32_t *gt_arr = NULL, ngt_arr = 0;
 	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
-	int max_ploidy = 0;
-	if ( ngt > 0 ) {
-		max_ploidy = ngt / nsmpl;
+	if (gt_arr == NULL) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
 	}
+	if ( ngt == 0 ) {
+		free(gt_arr);
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+
+	int max_ploidy = ngt / nsmpl;
   
 	SEXP ext = PROTECT(allocVector(INTSXP,ngt));nprotect++;	
 	for (i=0; i < nsmpl; i ++) {
 		for (j=0; j < max_ploidy; j++) {
 		  k = i * max_ploidy + j;
-		  // if true, the sample has smaller ploidy
 		  if (gt_arr[k]==bcf_int32_vector_end || bcf_gt_is_missing(gt_arr[k])) {
 		    INTEGER(ext)[k] = R_NaInt;
 		  } else {
 		    INTEGER(ext)[k] = bcf_gt_allele(gt_arr[k]);
 		  }
 		}
-   }
-	 free(gt_arr);
+  }
+	free(gt_arr);
 
 	UNPROTECT(nprotect);
 	return ext;
@@ -1437,10 +1443,16 @@ SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
 	// Identify the max-ploidy
 	int32_t *gt_arr = NULL, ngt_arr = 0;
 	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
-	int max_ploidy = 0;
-	if ( ngt > 0 ) {
-		max_ploidy = ngt / nsmpl;
+	if (gt_arr == NULL) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
 	}
+	if ( ngt == 0 ) {
+		free(gt_arr);
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+	int max_ploidy = ngt / nsmpl;
 
 	// Allocate a temporary array. Needs to store the indizes of the alleles.
 	// We make the assumption that we will never see more than 999 different alleles

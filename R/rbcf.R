@@ -429,7 +429,7 @@ genotype.alleles.idx0 <- function(gt) {
 #' 
 #' @param vc the variant
 #' @return an integer vector of length `ploidy * n_samples`
-variant.genotypes.alleles.idx0 <- function(vc) {
+variant.genotypes.allele.idx0 <- function(vc) {
 	.Call("RBcfCtxVariantAllGtAllelesIndexes0", vc);
 	}
 
@@ -459,7 +459,7 @@ genotype.ploidy <-function(gt) {
 	v
 	}
 
-#' @param gt the g==enotype
+#' @param gt the genotype
 #' @return TRUE if genotype is diploid and all alleles are reference
 #
 genotype.homref <-function(gt) {

@@ -1406,21 +1406,18 @@ SEXP RBcfCtxVariantAllGtAllelesIndexes0(SEXP sexpCtx) {
 	}
   
 	SEXP ext = PROTECT(allocVector(INTSXP,ngt));nprotect++;	
-
 	for (i=0; i < nsmpl; i ++) {
-		for (j=0; j<max_ploidy; j++) {
+		for (j=0; j < max_ploidy; j++) {
 		  k = i * max_ploidy + j;
 		  // if true, the sample has smaller ploidy
-		  if (gt_arr[k]==bcf_int32_vector_end ) {
-		     INTEGER(ext)[k] = -2;
-		  }
-		  else if ( bcf_gt_is_missing(gt_arr[k]) ) {
-		    INTEGER(ext)[k] = -1;
+		  if (gt_arr[k]==bcf_int32_vector_end || bcf_gt_is_missing(gt_arr[k])) {
+		    INTEGER(ext)[k] = R_NaInt;
 		  } else {
 		    INTEGER(ext)[k] = bcf_gt_allele(gt_arr[k]);
 		  }
 		}
    }
+	 free(gt_arr);
 
 	UNPROTECT(nprotect);
 	return ext;
@@ -1444,33 +1441,46 @@ SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
 	if ( ngt > 0 ) {
 		max_ploidy = ngt / nsmpl;
 	}
-	char *buf = malloc(max_ploidy * 2 * sizeof(char));
+
+	// Allocate a temporary array. Needs to store the indizes of the alleles.
+	// We make the assumption that we will never see more than 999 different alleles
+	// and therefore allocate 3+1 characters per allele(-index)
+	char *buf = malloc(max_ploidy * 4 * sizeof(char));
+	char *buf_ptr;
   
 	SEXP ext = PROTECT(allocVector(STRSXP,nsmpl));nprotect++;
 
 	for (i=0; i < nsmpl; i ++) {
+		buf_ptr = buf;
 		for (j=0; j<max_ploidy; j++) {
 		  k = i * max_ploidy + j;
+		  if (j > 0) {
+				// If this is not the first allele-index add a separator
+		  	if (bcf_gt_is_phased(gt_arr[k]) ){
+					 buf_ptr[0] = '|';
+			  } else {
+			  	 buf_ptr[0] = '/';
+				}
+				buf_ptr++;
+		  }
 		  // if true, the sample has smaller ploidy
-		  if (gt_arr[k]==bcf_int32_vector_end ) {
-		     buf[j*2] = '.';
+		  if (gt_arr[k] == bcf_int32_vector_end) {
+		     buf_ptr[0] = '-';
+		     buf_ptr[1] = '\0';
+				 buf_ptr += 2;
 		  }
-		  else if ( bcf_gt_is_missing(gt_arr[k]) ) {
-		     buf[j*2] = '.';
+		  else if (bcf_gt_is_missing(gt_arr[k])) {
+		     buf_ptr[0] = '.';
+		     buf_ptr[1] = '\0';
+				 buf_ptr += 2;
 		  } else {
-				sprintf(buf + (j*2), "%d", bcf_gt_allele(gt_arr[k]));
-		  }
-		  if (j + 1 >= max_ploidy) {
-					 buf[j*2 + 1] = '\0';
-		  } else if (bcf_gt_is_phased(gt_arr[k]) ){
-					 buf[j*2 + 1] = '|';
-			} else {
-					 buf[j*2 + 1] = '/';
+				buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
 		  }
 		}
 		SET_STRING_ELT(ext, i, mkChar(buf));
    }
 	free(buf);
+	free(gt_arr);
 
 	UNPROTECT(nprotect);
 	return ext;
@@ -2080,7 +2090,6 @@ SEXP GenotypeFloatAttribute(SEXP sexpGt,SEXP sexpatt) {
 	return ext;
 	}
 
-
 SEXP VariantGenotypesFlagAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	int nprotect=0;
 	PROTECT(sexpCtx);nprotect++;
@@ -2090,37 +2099,44 @@ SEXP VariantGenotypesFlagAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	ASSERT_NOT_NULL(ctx);
 	ASSERT_NOT_NULL(hdr);
 	ASSERT_NOT_NULL(att);
-	Int32ArrayPtr array = Int32ArrayNew();
-
 
 	bcf_unpack(ctx, BCF_UN_FMT);
 	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
 
-	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
-		int ndst=0;
-		int32_t* dst=NULL;
-		int ret=bcf_get_format_int32(hdr,ctx,att,(void**)&dst,&ndst);
-		if(ret>=0 && dst!=NULL ) {
-			for (int j=0; j< ndst; j++) {
-			    int32_t val=dst[j];
-			    if(val==bcf_int32_vector_end ) break;
-			    //IGNORE if(val==bcf_float_missing ) call->qsum[j] = 0;
-			    Int32ArrayPush(array,val == 0 ? 0 : 1);
-			}
-		}
-		free(dst);
+	if(!bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
 	}
-
-	SEXP ext = PROTECT(allocVector(INTSXP,array->size));nprotect++;	
- 	for(int i=0;i< array->size;i++) {
-	       	INTEGER(ext)[i] = array->data[i];
-		}
-
-	Int32ArrayFree(array);
 	
+	int ndst=0;
+	int32_t* dst=NULL;
+	int ret = bcf_get_format_int32(hdr,ctx,att,(void**)&dst,&ndst);
+	if(dst == NULL) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+	if(ret==0) {
+		free(dst);
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+		
+	// Copy the results
+	SEXP ext = PROTECT(allocVector(LGLSXP,ndst));nprotect++;	
+	int j = 0;
+	for (; j< ndst; j++) {
+	  int32_t val = dst[j];
+	  if (val==bcf_int32_vector_end) {
+	  	INTEGER(ext)[j] = R_NaInt;
+		} else {
+			INTEGER(ext)[j] = val == 0 ? 0 : 1;
+		}
+	}
+	free(dst);
+		
 	UNPROTECT(nprotect);
 	return ext;
-	}
+}
 
 
 SEXP VariantGenotypesInt32Attribute(SEXP sexpCtx,SEXP sexpatt) {
@@ -2132,39 +2148,44 @@ SEXP VariantGenotypesInt32Attribute(SEXP sexpCtx,SEXP sexpatt) {
 	ASSERT_NOT_NULL(ctx);
 	ASSERT_NOT_NULL(hdr);
 	ASSERT_NOT_NULL(att);
-	Int32ArrayPtr array = Int32ArrayNew();
-
 
 	bcf_unpack(ctx, BCF_UN_FMT);
 	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
-	
 
-	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
-		int ndst=0;
-		int32_t* dst=NULL;
-		int ret=bcf_get_format_int32(hdr,ctx,att,(void**)&dst,&ndst);
-		if(ret>=0 && dst!=NULL ) {
-			for (int j=0; j< ndst; j++) {
-			    int32_t val=dst[j];
-			    if(val==bcf_int32_vector_end ) break;
-			    //IGNORE if(val==bcf_float_missing ) call->qsum[j] = 0;
-			    Int32ArrayPush(array,val);
-			}
-		}
-		free(dst);
+	if(!bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
 	}
-
-	SEXP ext = PROTECT(allocVector(INTSXP,array->size));nprotect++;	
- 	for(int i=0;i< array->size;i++) {
-	       	INTEGER(ext)[i] = array->data[i];
-		}
-
-	Int32ArrayFree(array);
 	
+	int ndst=0;
+	int32_t* dst=NULL;
+	int ret=bcf_get_format_int32(hdr,ctx,att,(void**)&dst,&ndst);
+	if(dst == NULL) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+	if(ret==0) {
+		free(dst);
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+		
+	// Copy the results
+	SEXP ext = PROTECT(allocVector(INTSXP,ndst));nprotect++;	
+	int j = 0;
+	for (; j< ndst; j++) {
+	  int32_t val = dst[j];
+	  if (val==bcf_int32_vector_end) {
+	  	INTEGER(ext)[j] = R_NaInt;
+		} else {
+			INTEGER(ext)[j] = val;
+		}
+	}
+	free(dst);
+		
 	UNPROTECT(nprotect);
 	return ext;
-	}
-
+}
 
 SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	int nprotect=0;
@@ -2175,37 +2196,43 @@ SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	ASSERT_NOT_NULL(ctx);
 	ASSERT_NOT_NULL(hdr);
 	ASSERT_NOT_NULL(att);
-	FloatArrayPtr array = FloatArrayNew();
-
 
 	bcf_unpack(ctx, BCF_UN_FMT);
 	int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
-	
 
-	if(bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
-		int ndst=0;
-		float* dst=NULL;
-		int ret=bcf_get_format_float(hdr,ctx,att,(void**)&dst,&ndst);
-		if(ret>=0 && dst!=NULL ) {
-			for (int j=0; j< ndst; j++) {
-			    float val=dst[j];
-			    if(val==bcf_float_vector_end ) break;
-			    //IGNORE if(val==bcf_float_missing ) call->qsum[j] = 0;
-			    FloatArrayPush(array,val);
-			}
-		}
-		free(dst);
+	if(!bcf_hdr_idinfo_exists(hdr,BCF_HL_FMT,tag_id)) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
 	}
-
-	SEXP ext = PROTECT(allocVector(REALSXP,array->size));nprotect++;	
- 	for(int i=0;i< array->size;i++) {
-	       	REAL(ext)[i] = array->data[i];
-		}
-
-	FloatArrayFree(array);
 	
+	int ndst=0;
+	int32_t* dst=NULL;
+	int ret=bcf_get_format_float(hdr,ctx,att,(void**)&dst,&ndst);
+	if(dst == NULL) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+	if(ret==0) {
+		free(dst);
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+		
+	// Copy the results
+	SEXP ext = PROTECT(allocVector(REALSXP,ndst));nprotect++;	
+	int j = 0;
+	for (; j< ndst; j++) {
+	  int32_t val = dst[j];
+	  if (val==bcf_float_vector_end) {
+	  	REAL(ext)[j] = R_NaReal;
+		} else {
+			REAL(ext)[j] = val;
+		}
+	}
+	free(dst);
+		
 	UNPROTECT(nprotect);
 	return ext;
-	}
+}
 
 

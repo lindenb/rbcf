@@ -6,6 +6,8 @@ library(rbcf)
 count.variants<-function(filename,predicate) {
 	# we don't need the index for this file
 	fp <- bcf.open(filename,FALSE)
+	# error on opening
+	if(is.null(fp)) return(-1)
 	# number of variants
 	n<-0
 	# loop while we can read a variant

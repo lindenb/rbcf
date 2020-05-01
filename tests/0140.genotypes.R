@@ -14,6 +14,8 @@ find.variant<-function(fp,contig,pos) {
 filename<-"./data/1000G.ALL.2of4intersection.20100804.genotypes.bcf"
 # open the VCF with index
 fp <- bcf.open(filename)
+# error on opening (exit 0 for tests)
+if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 # find a variant
 ctx <-find.variant(fp,"1",10583)
 print(paste("Number of genotypes ",variant.nsamples(ctx)))

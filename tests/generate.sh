@@ -68,10 +68,10 @@ cat << __EOF__ >> tmp.tex
 \end{document}
 __EOF__
 
-pdflatex tmp.tex
-mv -v tmp.pdf ../doc/rbcf_examples.pdf
+if [[ -n "$(which pdflatex)" ]]; then 
+	pdflatex tmp.tex
+	mv -v tmp.pdf ../doc/rbcf_examples.pdf
+fi 
 rm -v tmp.tex
-
 mv -v tmp.md  ../README.md
-
 rm -v -f tmp.log tmp.out tmp.aux

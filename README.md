@@ -956,7 +956,7 @@ bcf.close(fp)
 ```
 
 
-### Working with Genotypes
+###  Working with vectorized Genotypes
 
 **Code**:
 
@@ -982,31 +982,33 @@ if(is.null(fp)) quit(save="no",status=0,runLast=FALSE)
 ctx <-find.variant(fp,"1",10583)
 print(paste("Number of genotypes ",variant.nsamples(ctx)))
 
+# Retrieve the DP for all genotypes (length of vector equals to number of samples)
 dp <- variant.genotypes.int.attribute(ctx, "DP")
 stopifnot(length(dp) == variant.nsamples(ctx))
 stopifnot(is.integer(dp))
 cat("DP: ", paste(dp, collapse = ", "), "\n")
 
+# Retrieve the AD for all genotypes (length of vector equals to 2x number of samples)
+#  The first two number contain the AD for REF and ALT for the first sample respectively.
 ad <- variant.genotypes.int.attribute(ctx, "AD")
 stopifnot(length(ad) == 2*variant.nsamples(ctx))
 stopifnot(is.integer(ad))
 cat("AD: ", paste(ad, collapse = ", "), "\n")
 
+# Helper function to get all the GT indizes
 gt <- variant.genotypes.allele.idx0(ctx)
 stopifnot(length(gt) == 2*variant.nsamples(ctx))
 stopifnot(is.integer(gt))
 cat("GT - Integers: ", paste(gt, collapse = ", "), "\n")
 
+# Helper function to get all the GT strings
 gt <- variant.genotypes.allele.strings(ctx)
 stopifnot(length(gt) == variant.nsamples(ctx))
 stopifnot(is.character(gt))
 cat("GT - Strings: ", paste(gt, collapse = ", "), "\n")
 
-
-
 # dispose the vcf reader
 bcf.close(fp)
-
 ```
 
 **Output**:

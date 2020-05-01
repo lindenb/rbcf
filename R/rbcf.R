@@ -413,10 +413,41 @@ variant.genotype<-function(vc,nameOrIdx) {
 #' @param gt the genotype
 #' @return max ploidy
 #
-genotype.alleles.idx0 <-function(gt) {
+genotype.alleles.idx0 <- function(gt) {
 	.Call("RBcfCtxVariantGtAllelesIndexes0",gt);
+}
+
+#' return the 0-based allele indizes for all genotypes of the variant
+#' 
+#' The returned vector contains the allele-indizes for all genotypes in sample order
+#' 
+#' For example, for a 3 sample VCF on a diploid variant, the returned vector could be 
+#' ```
+#'   GT1  GT2  GT3
+#' c(0,1, 0,0, 1,1)
+#' ```
+#' 
+#' @param vc the variant
+#' @return an integer vector of length `ploidy * n_samples`
+variant.genotypes.alleles.idx0 <- function(vc) {
+	.Call("RBcfCtxVariantAllGtAllelesIndexes0", vc);
 	}
 
+#' return the genotype strings for all genotypes of the variant
+#' 
+#' The returned vector contains the genotype strings in sample order.
+#' 
+#' For example, for a 3 sample VCF on a diploid variant, the returned vector could be 
+#' ```
+#'    GT1    GT2    GT3
+#' c("0/1", "0/0", "1/1")
+#' ```
+#' 
+#' @param vc the variant
+#' @return a character vector of length `n_samples`
+variant.genotypes.allele.strings <-function(vc) {
+	.Call("RBcfCtxVariantAllGtStrings", vc);
+	}
 
 #' @param gt the genotype
 #' @return the number of alleles for the genotypes
@@ -565,6 +596,72 @@ variant.snpeff <-function(vc) {
 	.Call("VariantSnpEffTable",vc)
 	}
 
+
+
+#' Return a specific FORMAT flag value on all genotypes
+#' 
+#' The returned vector contains the flags by sample and attribute number (if the attribute comprises multiple flags).
+#' 
+#' For example, for a 3 sample VCF with a flag having a single logical, the returned vector could be 
+#' ```
+#'    GT1    GT2   GT3
+#' c(TRUE, FALSE, TRUE)
+#' ```
+#' @param vc the variant
+#' 
+#' @return vector of logicals containing attribute values for all genotypes
+#' 
+#' @seealso 
+#'    \link{variant.genotypes.int.attribute}, 
+#'    \link{variant.genotypes.float.attribute}
+#'    
+variant.genotypes.flag.attribute <- function(vc, att) {
+	as.logical(.Call("VariantGenotypesFlagAttribute", vc, att))
+}
+
+#' Return a specific FORMAT integer value on all genotypes
+#' 
+#' The returned vector contains the values by sample and attribute number (if the attribute comprises multiple integer values).
+#' 
+#' For example, for a 3 sample VCF extracting the allelic read depth (AD) on a singleton variant, the results could look like: 
+#' ```
+#'   GT1-REF, GT1-ALT, GT2-REF, GT2-ALT, GT3-REF, GT3-ALT
+#' c(     10,     100,      25,      94,      45,       7)
+#' ```
+#' 
+#' @param vc the variant
+#' 
+#' @return vector of numerics containing attribute values for all genotypes
+#' 
+#' @seealso 
+#'    \link{variant.genotypes.flag.attribute}, 
+#'    \link{variant.genotypes.float.attribute}
+#'    
+variant.genotypes.int.attribute <- function(vc, att) {
+	.Call("VariantGenotypesInt32Attribute", vc, att)
+}
+
+#' Return a specific FORMAT numeric value on all genotypes
+#' 
+#' The returned vector contains the values by sample and attribute number (if the attribute comprises multiple integer values).
+#' 
+#' For example, for a 3 sample VCF extracting the allelic read fraction (AF) on a multi-allelic variant, the results could look like: 
+#' ```
+#'   GT1-ALT1, GT1-ALT2, GT2-ALT1, GT2-ALT2, GT3-ALT1, GT3-ALT2
+#' c(     0.9,      0.1,      0.6,      0.1,      0.1,      0.4)
+#' ```
+#' 
+#' @param vc the variant
+#' 
+#' @return vector of numerics containing attribute values for all genotypes
+#' 
+#' @seealso 
+#'    \link{variant.genotypes.flag.attribute}, 
+#'    \link{variant.genotypes.float.attribute}
+#'
+variant.genotypes.float.attribute <- function(vc, att) {
+	.Call("variant.genotypes.int.attribute", vc, att)
+}
 
 #' @param gt the genotype
 #' @param att the key

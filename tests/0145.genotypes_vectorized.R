@@ -23,7 +23,7 @@ print(paste("Number of genotypes ",variant.nsamples(ctx)))
 dp <- variant.genotypes.int.attribute(ctx, "DP")
 stopifnot(length(dp) == variant.nsamples(ctx))
 stopifnot(is.integer(dp))
-cat("DP: ", paste(head(dp), collapse = ", "), "\n")
+cat("DP: ", paste(dp, collapse = ", "), "\n")
 
 ad <- variant.genotypes.int.attribute(ctx, "AD")
 stopifnot(length(ad) == 2*variant.nsamples(ctx))

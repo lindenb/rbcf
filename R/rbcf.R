@@ -436,24 +436,29 @@ variant.genotypes.allele.idx0 <- function(vc) {
 
 #' Counts the allele-counts per genotype for a given allele
 #' 
-#' The returned vector contains the allele-indizes for all genotypes in sample order
+#' The returned vector contains the number of occurance of a specific allele 
+#' in all genotypes. 
 #' 
 #' For example, for a 3 sample VCF on a diploid variant with genotypes 
 #' ```
 #'   GT1  GT2  GT3
-#'   0/1  0/0  1/1)
+#'   0/1  0/0  1/1
 #' ```
 #' the result will be 
 #' ``` 
 #' variant.genotypes.allele.count(vc, 0) => c(1,2,0)
 #' variant.genotypes.allele.count(vc, 1) => c(1,0,2)
+#' ``` 
 #' 
 #' @param vc the variant
-#' @param allele_index The index of the allele to count (zero-based)
-#' @return an integer vector of length `ploidy * n_samples`
+#' @param allele_index The index of the allele to count (0-based)
+#' @return an integer vector of length `n_samples`
 variant.genotypes.allele.counts <- function(vc, allele_index = 1) {
-	.Call("RBcfCtxVariantAllGtAllelesAlleleCounts", vc, allele_index);
-	}
+   stopifnot(is.numeric(allele_index))
+   stopifnot(allele_index >= 0)
+   allele_index <- as.integer(allele_index)
+  .Call("RBcfCtxVariantAllGtAllelesAlleleCounts", vc, allele_index);
+}
 
 #' return the genotype strings for all genotypes of the variant
 #' 

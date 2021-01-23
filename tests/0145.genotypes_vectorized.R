@@ -39,6 +39,17 @@ stopifnot(length(gt) == 2*variant.nsamples(ctx))
 stopifnot(is.integer(gt))
 cat("GT - Integers: ", paste(gt, collapse = ", "), "\n")
 
+# Helper function to get all the GT allele-counts
+gt <- variant.genotypes.allele.counts(ctx, 0)
+stopifnot(length(gt) == variant.nsamples(ctx))
+stopifnot(is.integer(gt))
+cat("GT - Allele Counts (Reference): ", paste(gt, collapse = ", "), "\n")
+gt <- variant.genotypes.allele.counts(ctx, 1)
+stopifnot(length(gt) == variant.nsamples(ctx))
+stopifnot(is.integer(gt))
+cat("GT - Allele Counts (Alternative): ", paste(gt, collapse = ", "), "\n")
+
+
 # Helper function to get all the GT strings
 gt <- variant.genotypes.allele.strings(ctx)
 stopifnot(length(gt) == variant.nsamples(ctx))

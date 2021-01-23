@@ -76,5 +76,6 @@ export(variant.genotypes.flag.attribute)
 export(variant.genotypes.int.attribute)
 export(variant.genotypes.float.attribute)
 export(variant.genotypes.allele.idx0)
+export(variant.genotypes.allele.counts)
 export(variant.genotypes.allele.strings)
 

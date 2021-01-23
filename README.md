@@ -1001,6 +1001,13 @@ stopifnot(length(gt) == 2*variant.nsamples(ctx))
 stopifnot(is.integer(gt))
 cat("GT - Integers: ", paste(gt, collapse = ", "), "\n")
 
+# Helper function to get all the GT allele-counts
+gt <- variant.genotypes.allele.counts(ctx, 1)
+stopifnot(length(gt) == variant.nsamples(ctx))
+stopifnot(is.integer(gt))
+cat("GT - Allele Counts: ", paste(gt, collapse = ", "), "\n")
+
+
 # Helper function to get all the GT strings
 gt <- variant.genotypes.allele.strings(ctx)
 stopifnot(length(gt) == variant.nsamples(ctx))
@@ -1018,6 +1025,7 @@ bcf.close(fp)
 DP:  NA, NA, NA, NA, NA, NA, 2, NA, 1, 5, NA, NA, 1, NA, NA, 3, NA, NA, NA, 4, 1, 1, 1, 1, NA, (...)
 AD:  NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 2, 0, NA, NA, 5, 1, 4, 1, NA, NA, NA, NA, (...)
 GT - Integers:  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0(...)
+GT - Allele Counts:  0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0,(...)
 GT - Strings:  0|0, 0|0, 0|0, 0|0, 0|0, 0|0, 0|0, 0|0, 0|0, 0|1, 0|0, 0|0, 0|0, 0|0, 0|0, 0|0, (...)
 [1] TRUE
 ```

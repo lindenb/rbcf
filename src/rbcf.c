@@ -1429,6 +1429,52 @@ SEXP RBcfCtxVariantAllGtAllelesIndexes0(SEXP sexpCtx) {
 	return ext;
 	}
 
+SEXP RBcfCtxVariantAllGtAllelesAlleleCounts(SEXP sexpCtx, SEXP sexpAlleleIndex) {
+	int nprotect=0;
+	int i,j,k;
+	PROTECT(sexpCtx);nprotect++;
+	PROTECT(sexpAlleleIndex);nprotect++;
+	
+	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+	int allele_index = asInteger(sexpAlleleIndex);
+	
+	// Total number of samples
+	int nsmpl = bcf_hdr_nsamples(hdr);
+
+	// Identify the max-ploidy
+	int32_t *gt_arr = NULL, ngt_arr = 0;
+	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+	if (gt_arr == NULL) {
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+	if ( ngt == 0 ) {
+		free(gt_arr);
+		UNPROTECT(nprotect);
+		return R_NilValue;
+	}
+
+	int max_ploidy = ngt / nsmpl;
+  
+	SEXP ext = PROTECT(allocVector(INTSXP,nsmpl));nprotect++;	
+	for (i=0; i < nsmpl; i ++) {
+		INTEGER(ext)[i] = 0;
+		for (j=0; j < max_ploidy; j++) {
+		  k = i * max_ploidy + j;
+		  if (INTEGER(ext)[i] == R_NaInt || gt_arr[k]==bcf_int32_vector_end || bcf_gt_is_missing(gt_arr[k])) {
+		    INTEGER(ext)[i] = R_NaInt;
+		  } else {
+		    INTEGER(ext)[i] += bcf_gt_allele(gt_arr[k]) == allele_index;
+		  }
+		}
+  }
+	free(gt_arr);
+
+	UNPROTECT(nprotect);
+	return ext;
+	}
+
 SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
 	int nprotect=0;
 	int i,j,k;

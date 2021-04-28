@@ -790,7 +790,7 @@ variant.genotypes.float.attribute <- function(vc, att) {
   stopifnot(looks_like_variant_context(vc))
   stopifnot(is.character(att))
   stopifnot(length(att) == 1)
-	.Call("variant.genotypes.int.attribute", vc, att)
+	.Call("VariantGenotypesFloatAttribute", vc, att)
 }
 
 #' @param gt the genotype

@@ -793,6 +793,37 @@ variant.genotypes.float.attribute <- function(vc, att) {
 	.Call("VariantGenotypesFloatAttribute", vc, att)
 }
 
+#' Set a specific FORMAT integer value on all genotypes
+#'
+#' The vector must contain the values by sample and attribute number (if the attribute comprises multiple integer values).
+#'
+#' For example, for a 3 sample VCF extracting the allelic read depth (AD) on a singleton variant, the would look like:
+#' ```
+#'   GT1-REF, GT1-ALT, GT2-REF, GT2-ALT, GT3-REF, GT3-ALT
+#' c(     10,     100,      25,      94,      45,       7)
+#' ```
+#'
+#' @param vc the variant
+#' @param att a character vector containing the variant attribute
+#' @param values a numeric vector to set the value (will be converted to integer)
+#'
+#' @return the variant `vc`
+#'
+#' @seealso
+#'    \link{variant.genotypes.flag.attribute},
+#'    \link{variant.genotypes.float.attribute}
+#'
+variant.genotypes.set.int.attribute <- function(vc, att, values) {
+  stopifnot(looks_like_variant_context(vc))
+  stopifnot(is.character(att))
+  stopifnot(length(att) == 1)
+  stopifnot(is.numeric(values))
+  .Call("VariantGenotypesSetInt32Attribute", vc, att, as.integer(values))
+}
+
+
+
+
 #' @param gt the genotype
 #' @param att the key
 #' @return the values for this key+genotype

@@ -2293,4 +2293,91 @@ SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	return ext;
 }
 
-
+SEXP VariantGenotypesSetInt32Attribute(SEXP sexpGt, SEXP sexpatt, SEXP sexpval) {
+  int nprotect=0;
+  
+  PROTECT(sexpGt);nprotect++;
+  PROTECT(sexpatt);nprotect++;
+  PROTECT(sexpval);nprotect++;
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpGt);
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpatt);
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpval);
+  
+  bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+  if (!hdr) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+  if (!ctx) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  const char* att = CHAR(asChar(sexpatt));
+  if (!att) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  bcf_unpack(ctx, BCF_UN_FMT);
+  
+  // Check if the attribute can be found in the 
+  int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+  if(!bcf_hdr_idinfo_exists(hdr, BCF_HL_FMT, tag_id)) {
+    BCF_WARNING("No header information exists for attribute '%s'", att);
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  // The length of the supplied vector
+  int value_length = length(sexpval);
+  int nsamples = bcf_hdr_nsamples(hdr);
+  
+  // The length-type of the field
+  int fmt_length_type = bcf_hdr_id2length(hdr, BCF_HL_FMT, tag_id);
+  if (fmt_length_type == BCF_VL_FIXED) {
+    int expected_length = bcf_hdr_id2number(hdr, BCF_HL_FMT, tag_id) * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' is %d but got a vector of %d values", att, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_VAR) {
+    // We expect any multiple of n_samples
+    if (value_length % nsamples != 0) {
+      BCF_WARNING("Expected that values contains any multiple of %d entries for attribute '%s' but got %d", att, nsamples, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_A) {
+    int expected_length = (ctx->n_allele - 1) * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type A and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_R) {
+    int expected_length = ctx->n_allele * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type R and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_G) {
+    int expected_length = ((ctx->n_allele^2) +  ctx->n_allele) / 2 * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type G and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  }
+  
+  if (bcf_update_format_int32(hdr, ctx, att, INTEGER(sexpval), value_length) != 0) {
+    BCF_WARNING("Can not set attribute for variant for unknown reason");
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  UNPROTECT(nprotect);
+  return sexpGt;
+}

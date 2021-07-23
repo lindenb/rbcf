@@ -1524,13 +1524,11 @@ SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
       // if true, the sample has smaller ploidy
       if (gt_arr[k] == bcf_int32_vector_end) {
         buf_ptr[0] = '-';
-        buf_ptr[1] = '\0';
-        buf_ptr += 2;
+        buf_ptr++;
       }
       else if (bcf_gt_is_missing(gt_arr[k])) {
         buf_ptr[0] = '.';
-        buf_ptr[1] = '\0';
-        buf_ptr += 2;
+        buf_ptr++;
       } else {
         buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
       }

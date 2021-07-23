@@ -1561,42 +1561,57 @@ SEXP VariantGenotypesSetAllGtStrings(SEXP sexpCtx, SEXP sexpAllele) {
   bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
   
   // Total number of samples
-  int nsmpl = bcf_hdr_nsamples(hdr);
-  
-  // Get the currently set genotypes
-  int32_t *gt_arr = NULL, ngt_arr = 0;
-  int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
-  if (gt_arr == NULL) {
-    BCF_WARNING("Can not retrieve the current genotypes");
-    UNPROTECT(nprotect);
-    return R_NilValue;
-  }
-  if ( ngt == 0 ) {
-    BCF_WARNING("Can not retrieve the current genotypes");
-    free(gt_arr);
-    UNPROTECT(nprotect);
-    return R_NilValue;
-  }
-  
-  // Determine the max ploidy, i.e., number of GT per sample
-  int max_ploidy = ngt / nsmpl;
-  int n_alleles = ctx->n_allele;
+  int32_t n_samples = bcf_hdr_nsamples(hdr);
+  int32_t n_alleles = ctx->n_allele;
   
   // Use a buffer to contain the current genotype (this copy will be modified by strtok()) 
   char gt_pointer_cpy[128];
   char delimiter[] = "/|";
   
+  
+  // Determine the max ploidy to know the size of needed array
+  int max_ploidy = 0;
+  for (int sidx = 0; sidx < n_samples; sidx++) {
+    int cur_ploidy = 0;
+    char const *gt_pointer = CHAR(STRING_ELT(sexpAllele, sidx));
+    if (!strcpy(gt_pointer_cpy, gt_pointer)) {
+      BCF_ERROR("Can not copy gt-string");
+    }
+    char *ptr = strtok(gt_pointer_cpy, delimiter);
+    while(ptr != NULL) {
+      cur_ploidy++;
+      ptr = strtok(NULL, delimiter);
+    }
+    
+    if (cur_ploidy > max_ploidy) {
+      max_ploidy = cur_ploidy;
+    }
+  }
+  
+  // Allocate an array to encode the genotypes
+  int32_t ngt_arr = n_samples * max_ploidy;
+  int32_t *gt_arr = malloc(ngt_arr * sizeof(int32_t));
+  if (gt_arr == NULL) {
+    BCF_WARNING("Can not allocate array to encode genotypes");
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
   // start parsing the GT and insert them into the array
-  for (int sidx = 0; sidx < nsmpl; sidx++) {
+  for (int sidx = 0; sidx < n_samples; sidx++) {
     int cur_ploidy = 0;
     char const *gt_pointer = CHAR(STRING_ELT(sexpAllele, sidx));
     
     // Do not parse the genotype if it is an empty one
-    if (strcmp(".", gt_pointer) != 0) {
+    if (strcmp(".", gt_pointer) == 0) {
+      int gt_idx = (sidx * max_ploidy);
+      gt_arr[gt_idx] = bcf_gt_missing;
+      cur_ploidy++;
+    } else {
       if (!strcpy(gt_pointer_cpy, gt_pointer)) {
         BCF_ERROR("Can not copy gt-string");
       }
-      LOG("Processing sample %d with GT '%s'", sidx, gt_pointer);
+      //LOG("Processing sample %d with GT '%s'", sidx, gt_pointer);
       
       // initialisieren und ersten Abschnitt erstellen
       char *ptr = strtok(gt_pointer_cpy, delimiter);
@@ -1606,9 +1621,13 @@ SEXP VariantGenotypesSetAllGtStrings(SEXP sexpCtx, SEXP sexpAllele) {
           BCF_ERROR("Number of genotypes in sample %i ('%s') exceeds expected maximum ploidy of %d", sidx, gt_pointer, max_ploidy);
         }
         
-        LOG("Allele found: '%s'", ptr);
+        //LOG("Allele found: '%s'", ptr);
         int current_gt = bcf_gt_missing;
-        if (strncmp(".", ptr, 2) != 0 && strncmp("-", ptr, 2) != 0) {
+        if (strncmp(".", ptr, 2) == 0) {
+          current_gt = bcf_gt_missing;
+        } else if (strncmp("-", ptr, 2) == 0) {
+          current_gt = bcf_int32_vector_end;
+        } else {
           errno = 0;
           long allele_idx = strtol(ptr, NULL, 10);
           if (errno == ERANGE || allele_idx < 0 || allele_idx > n_alleles) {
@@ -1621,17 +1640,16 @@ SEXP VariantGenotypesSetAllGtStrings(SEXP sexpCtx, SEXP sexpAllele) {
         int gt_idx = (sidx * max_ploidy) + cur_ploidy;
         cur_ploidy++;
         gt_arr[gt_idx] = current_gt;
-        LOG("Updated index %d with value %d", gt_idx, gt_arr[gt_idx]);
+        //LOG("Updated index %d with value %d", gt_idx, gt_arr[gt_idx]);
         
         ptr = strtok(NULL, delimiter);
       }
     }
-    
     // Fill up the sample indizes in case we have lower ploidy for this sample
     while(cur_ploidy < max_ploidy) {
       int gt_idx = (sidx * max_ploidy) + cur_ploidy;
       cur_ploidy++;
-      gt_arr[gt_idx] = bcf_gt_missing;
+      gt_arr[gt_idx] = bcf_int32_vector_end;
     }
   }
   

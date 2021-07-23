@@ -810,8 +810,7 @@ variant.genotypes.float.attribute <- function(vc, att) {
 #' @return the variant `vc`
 #'
 #' @seealso
-#'    \link{variant.genotypes.flag.attribute},
-#'    \link{variant.genotypes.float.attribute}
+#'    \link{variant.genotypes.int.attribute}
 #'
 variant.genotypes.set.int.attribute <- function(vc, att, values) {
   stopifnot(looks_like_variant_context(vc))
@@ -821,6 +820,30 @@ variant.genotypes.set.int.attribute <- function(vc, att, values) {
   .Call("VariantGenotypesSetInt32Attribute", vc, att, as.integer(values))
 }
 
+#' Set the genotypes `FORMAT/GT` for all genotype call of a variant
+#'
+#' The vector must contain the values in the order of `bcf.samples`:
+#' ```
+#'   Sample1, Sample2, Sample3
+#' c(  "0/1",   "0/0",      NA)
+#' ```
+#' 
+#' The `NA` will be replaces by ".".
+#'
+#' @param vc the variant
+#' @param values a characters vector containing the genotype calls (see details)
+#'
+#' @return the variant `vc`
+#'
+#' @seealso
+#'    \link{variant.genotypes.allele.strings}
+#'
+variant.genotypes.set.allele.strings <- function(vc, values) {
+  stopifnot(looks_like_variant_context(vc))
+  stopifnot(is.character(values))
+  values[ is.na(values) ] <- "."
+  .Call("VariantGenotypesSetAllGtStrings", vc, as.character(values))
+}
 
 
 

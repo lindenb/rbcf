@@ -1476,73 +1476,175 @@ SEXP RBcfCtxVariantAllGtAllelesAlleleCounts(SEXP sexpCtx, SEXP sexpAlleleIndex) 
 	}
 
 SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
-	int nprotect=0;
-	int i,j,k;
-	PROTECT(sexpCtx);nprotect++;
-	
-	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
-	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
-	
-	// Total number of samples
-	int nsmpl = bcf_hdr_nsamples(hdr);
-
-	// Identify the max-ploidy
-	int32_t *gt_arr = NULL, ngt_arr = 0;
-	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
-	if (gt_arr == NULL) {
-		UNPROTECT(nprotect);
-		return R_NilValue;
-	}
-	if ( ngt == 0 ) {
-		free(gt_arr);
-		UNPROTECT(nprotect);
-		return R_NilValue;
-	}
-	int max_ploidy = ngt / nsmpl;
-
-	// Allocate a temporary array. Needs to store the indizes of the alleles.
-	// We make the assumption that we will never see more than 999 different alleles
-	// and therefore allocate 3+1 characters per allele(-index)
-	char *buf = malloc(max_ploidy * 4 * sizeof(char));
-	char *buf_ptr;
+  int nprotect=0;
+  int i,j,k;
+  PROTECT(sexpCtx);nprotect++;
   
-	SEXP ext = PROTECT(allocVector(STRSXP,nsmpl));nprotect++;
+  bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+  bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+  
+  // Total number of samples
+  int nsmpl = bcf_hdr_nsamples(hdr);
+  
+  // Identify the max-ploidy
+  int32_t *gt_arr = NULL, ngt_arr = 0;
+  int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+  if (gt_arr == NULL) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  if ( ngt == 0 ) {
+    free(gt_arr);
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  int max_ploidy = ngt / nsmpl;
+  
+  // Allocate a temporary array. Needs to store the indizes of the alleles.
+  // We make the assumption that we will never see more than 999 different alleles
+  // and therefore allocate 3+1 characters per allele(-index)
+  char *buf = malloc(max_ploidy * 4 * sizeof(char));
+  char *buf_ptr;
+  
+  SEXP ext = PROTECT(allocVector(STRSXP,nsmpl));nprotect++;
+  
+  for (i=0; i < nsmpl; i ++) {
+    buf_ptr = buf;
+    for (j=0; j<max_ploidy; j++) {
+      k = i * max_ploidy + j;
+      if (j > 0) {
+        // If this is not the first allele-index add a separator
+        if (bcf_gt_is_phased(gt_arr[k]) ){
+          buf_ptr[0] = '|';
+        } else {
+          buf_ptr[0] = '/';
+        }
+        buf_ptr++;
+      }
+      // if true, the sample has smaller ploidy
+      if (gt_arr[k] == bcf_int32_vector_end) {
+        buf_ptr[0] = '-';
+        buf_ptr[1] = '\0';
+        buf_ptr += 2;
+      }
+      else if (bcf_gt_is_missing(gt_arr[k])) {
+        buf_ptr[0] = '.';
+        buf_ptr[1] = '\0';
+        buf_ptr += 2;
+      } else {
+        buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
+      }
+    }
+    SET_STRING_ELT(ext, i, mkChar(buf));
+  }
+  free(buf);
+  free(gt_arr);
+  
+  UNPROTECT(nprotect);
+  return ext;
+}
 
-	for (i=0; i < nsmpl; i ++) {
-		buf_ptr = buf;
-		for (j=0; j<max_ploidy; j++) {
-		  k = i * max_ploidy + j;
-		  if (j > 0) {
-				// If this is not the first allele-index add a separator
-		  	if (bcf_gt_is_phased(gt_arr[k]) ){
-					 buf_ptr[0] = '|';
-			  } else {
-			  	 buf_ptr[0] = '/';
-				}
-				buf_ptr++;
-		  }
-		  // if true, the sample has smaller ploidy
-		  if (gt_arr[k] == bcf_int32_vector_end) {
-		     buf_ptr[0] = '-';
-		     buf_ptr[1] = '\0';
-				 buf_ptr += 2;
-		  }
-		  else if (bcf_gt_is_missing(gt_arr[k])) {
-		     buf_ptr[0] = '.';
-		     buf_ptr[1] = '\0';
-				 buf_ptr += 2;
-		  } else {
-				buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
-		  }
-		}
-		SET_STRING_ELT(ext, i, mkChar(buf));
-   }
-	free(buf);
-	free(gt_arr);
-
-	UNPROTECT(nprotect);
-	return ext;
-	}
+SEXP VariantGenotypesSetAllGtStrings(SEXP sexpCtx, SEXP sexpAllele) {
+  if (TYPEOF(sexpAllele) != STRSXP) {
+    BCF_ERROR("Genotype allele is not a character vector (STRSXP)");
+  }
+  
+  int nprotect=0;
+  PROTECT(sexpCtx);nprotect++;
+  PROTECT(sexpAllele);nprotect++;
+  
+  bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+  bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+  
+  // Total number of samples
+  int nsmpl = bcf_hdr_nsamples(hdr);
+  
+  // Get the currently set genotypes
+  int32_t *gt_arr = NULL, ngt_arr = 0;
+  int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+  if (gt_arr == NULL) {
+    BCF_WARNING("Can not retrieve the current genotypes");
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  if ( ngt == 0 ) {
+    BCF_WARNING("Can not retrieve the current genotypes");
+    free(gt_arr);
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  // Determine the max ploidy, i.e., number of GT per sample
+  int max_ploidy = ngt / nsmpl;
+  int n_alleles = ctx->n_allele;
+  
+  // Use a buffer to contain the current genotype (this copy will be modified by strtok()) 
+  char gt_pointer_cpy[128];
+  char delimiter[] = "/|";
+  
+  // start parsing the GT and insert them into the array
+  for (int sidx = 0; sidx < nsmpl; sidx++) {
+    int cur_ploidy = 0;
+    char const *gt_pointer = CHAR(STRING_ELT(sexpAllele, sidx));
+    
+    // Do not parse the genotype if it is an empty one
+    if (strcmp(".", gt_pointer) != 0) {
+      if (!strcpy(gt_pointer_cpy, gt_pointer)) {
+        BCF_ERROR("Can not copy gt-string");
+      }
+      LOG("Processing sample %d with GT '%s'", sidx, gt_pointer);
+      
+      // initialisieren und ersten Abschnitt erstellen
+      char *ptr = strtok(gt_pointer_cpy, delimiter);
+      short is_phased = gt_pointer[ strlen(ptr) ] == '|' ? 1 : 0;
+      while(ptr != NULL) {
+        if (cur_ploidy > max_ploidy) {
+          BCF_ERROR("Number of genotypes in sample %i ('%s') exceeds expected maximum ploidy of %d", sidx, gt_pointer, max_ploidy);
+        }
+        
+        LOG("Allele found: '%s'", ptr);
+        int current_gt = bcf_gt_missing;
+        if (strncmp(".", ptr, 2) != 0 && strncmp("-", ptr, 2) != 0) {
+          errno = 0;
+          long allele_idx = strtol(ptr, NULL, 10);
+          if (errno == ERANGE || allele_idx < 0 || allele_idx > n_alleles) {
+            BCF_ERROR("Parsed allele-index %l is out of range for %d alleles", allele_idx, n_alleles);
+          }
+          current_gt = is_phased > 0 ? bcf_gt_phased(allele_idx) : bcf_gt_unphased(allele_idx);
+        }
+        
+        // Calculate the index of the genotype in the data
+        int gt_idx = (sidx * max_ploidy) + cur_ploidy;
+        cur_ploidy++;
+        gt_arr[gt_idx] = current_gt;
+        LOG("Updated index %d with value %d", gt_idx, gt_arr[gt_idx]);
+        
+        ptr = strtok(NULL, delimiter);
+      }
+    }
+    
+    // Fill up the sample indizes in case we have lower ploidy for this sample
+    while(cur_ploidy < max_ploidy) {
+      int gt_idx = (sidx * max_ploidy) + cur_ploidy;
+      cur_ploidy++;
+      gt_arr[gt_idx] = bcf_gt_missing;
+    }
+  }
+  
+  if (bcf_update_genotypes(hdr, ctx, gt_arr, ngt_arr) < 0) {
+    free(gt_arr);
+    BCF_ERROR("Can not update genotypes");
+  }
+  
+  free(gt_arr);
+  
+  // Return a single int
+  SEXP ext = PROTECT(allocVector(INTSXP,1));nprotect++;	
+  INTEGER(ext)[0] = 1;
+  
+  UNPROTECT(nprotect);
+  return ext;
+}
 
 SEXP GenotypeSample(SEXP sexpGt) {
         int nprotect=0;

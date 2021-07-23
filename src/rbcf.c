@@ -1532,13 +1532,14 @@ SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
         // if true, the sample has smaller ploidy
         if (bcf_gt_is_missing(gt_arr[k])) {
           buf_ptr[0] = '.';
+          buf_ptr[1] = '\0';
           buf_ptr++;
-        } else {
+        } else { 
           buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
+          buf_ptr[0] = '\0';
         }
       }
     }
-    buf_ptr[0] = '\0';
     SET_STRING_ELT(ext, i, mkChar(buf));
   }
   free(buf);

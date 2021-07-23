@@ -80,3 +80,4 @@ export(variant.genotypes.allele.counts)
 export(variant.genotypes.allele.strings)
 
 export(variant.genotypes.set.int.attribute)
+export(variant.genotypes.set.allele.strings)

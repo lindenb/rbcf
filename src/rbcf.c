@@ -1512,27 +1512,33 @@ SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
     buf_ptr = buf;
     for (j=0; j<max_ploidy; j++) {
       k = i * max_ploidy + j;
-      if (j > 0) {
-        // If this is not the first allele-index add a separator
-        if (bcf_gt_is_phased(gt_arr[k]) ){
-          buf_ptr[0] = '|';
-        } else {
-          buf_ptr[0] = '/';
-        }
-        buf_ptr++;
-      }
-      // if true, the sample has smaller ploidy
+      
+      // If the current index is array-end, stop parsing here
       if (gt_arr[k] == bcf_int32_vector_end) {
-        buf_ptr[0] = '-';
-        buf_ptr++;
+        buf_ptr[0] = '\0';
+        j = max_ploidy;
       }
-      else if (bcf_gt_is_missing(gt_arr[k])) {
-        buf_ptr[0] = '.';
-        buf_ptr++;
-      } else {
-        buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
+      else {
+        if (j > 0) {
+          // If this is not the first allele-index add a separator
+          if (bcf_gt_is_phased(gt_arr[k]) ){
+            buf_ptr[0] = '|';
+          } else {
+            buf_ptr[0] = '/';
+          }
+          buf_ptr++;
+        }
+        
+        // if true, the sample has smaller ploidy
+        if (bcf_gt_is_missing(gt_arr[k])) {
+          buf_ptr[0] = '.';
+          buf_ptr++;
+        } else {
+          buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
+        }
       }
     }
+    buf_ptr[0] = '\0';
     SET_STRING_ELT(ext, i, mkChar(buf));
   }
   free(buf);

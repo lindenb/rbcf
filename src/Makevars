@@ -28,7 +28,7 @@ $(HTSDIR)/Makefile:
 	wget -O "htslib-$(HSTLIB_VERSION).tar.bz2" "https://github.com/samtools/htslib/releases/download/$(HSTLIB_VERSION)/htslib-$(HSTLIB_VERSION).tar.bz2"
 	tar xfj htslib-$(HSTLIB_VERSION).tar.bz2
 	mv "htslib-$(HSTLIB_VERSION)" "$(HTSDIR)"
-	(cd $(HTSDIR) && ./configure && sed -i '/^CFLAGS/s/$$/ -fPIC/' config.mk) || rm $@
+	(cd $(HTSDIR) && ./configure --without-libdeflate && sed -i '/^CFLAGS/s/$$/ -fPIC/' config.mk) || rm $@
 
 clean:
 	rm -f librbcf.so

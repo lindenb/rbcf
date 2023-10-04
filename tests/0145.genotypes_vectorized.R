@@ -26,6 +26,12 @@ stopifnot(length(dp) == variant.nsamples(ctx))
 stopifnot(is.integer(dp))
 cat("DP: ", paste(dp, collapse = ", "), "\n")
 
+# Retrieve the GQ for all genotypes (length of vector equals to number of samples)
+dp <- variant.genotypes.float.attribute(ctx, "GQ")
+stopifnot(length(dp) == variant.nsamples(ctx))
+stopifnot(is.numeric(dp))
+cat("GQ: ", paste(dp, collapse = ", "), "\n")
+
 # Retrieve the AD for all genotypes (length of vector equals to 2x number of samples)
 #  The first two number contain the AD for REF and ALT for the first sample respectively.
 ad <- variant.genotypes.int.attribute(ctx, "AD")

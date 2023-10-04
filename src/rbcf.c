@@ -2389,7 +2389,7 @@ SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	}
 	
 	int ndst=0;
-	int32_t* dst=NULL;
+	float* dst=NULL;
 	int ret=bcf_get_format_float(hdr,ctx,att,(void**)&dst,&ndst);
 	if(dst == NULL) {
 		UNPROTECT(nprotect);
@@ -2405,7 +2405,7 @@ SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	SEXP ext = PROTECT(allocVector(REALSXP,ndst));nprotect++;	
 	int j = 0;
 	for (; j< ndst; j++) {
-	  int32_t val = dst[j];
+	  float val = dst[j];
 	  if (val==bcf_float_vector_end) {
 	  	REAL(ext)[j] = R_NaReal;
 		} else {

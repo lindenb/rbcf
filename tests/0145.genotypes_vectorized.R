@@ -27,10 +27,10 @@ stopifnot(is.integer(dp))
 cat("DP: ", paste(dp, collapse = ", "), "\n")
 
 # Retrieve the GQ for all genotypes (length of vector equals to number of samples)
-dp <- variant.genotypes.float.attribute(ctx, "GQ")
-stopifnot(length(dp) == variant.nsamples(ctx))
-stopifnot(is.numeric(dp))
-cat("GQ: ", paste(dp, collapse = ", "), "\n")
+gq <- variant.genotypes.float.attribute(ctx, "GQ")
+stopifnot(length(gq) == variant.nsamples(ctx))
+stopifnot(is.numeric(gq))
+cat("GQ: ", paste(gq, collapse = ", "), "\n")
 
 # Retrieve the AD for all genotypes (length of vector equals to 2x number of samples)
 #  The first two number contain the AD for REF and ALT for the first sample respectively.
@@ -50,11 +50,11 @@ gt <- variant.genotypes.allele.counts(ctx, 0)
 stopifnot(length(gt) == variant.nsamples(ctx))
 stopifnot(is.integer(gt))
 cat("GT - Allele Counts (Reference): ", paste(gt, collapse = ", "), "\n")
-gt <- variant.genotypes.allele.counts(ctx, 1)
-stopifnot(length(gt) == variant.nsamples(ctx))
-stopifnot(is.integer(gt))
-cat("GT - Allele Counts (Alternative): ", paste(gt, collapse = ", "), "\n")
 
+gtc <- variant.genotypes.allele.counts(ctx, 1)
+stopifnot(length(gtc) == variant.nsamples(ctx))
+stopifnot(is.integer(gtc))
+cat("GT - Allele Counts (Alternative): ", paste(gtc, collapse = ", "), "\n")
 
 # Helper function to get all the GT strings
 gt <- variant.genotypes.allele.strings(ctx)

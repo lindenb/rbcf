@@ -844,7 +844,7 @@ variant.genotypes.set.float.attribute <- function(vc, att, values) {
   stopifnot(is.character(att))
   stopifnot(length(att) == 1)
   stopifnot(is.numeric(values))
-  .Call("VariantGenotypesSetFloatAttribute", vc, att, as.numeric(values))
+  .Call("VariantGenotypesSetFloatAttribute", vc, att, values)
 }
 
 #' Set the genotypes `FORMAT/GT` for all genotype call of a variant

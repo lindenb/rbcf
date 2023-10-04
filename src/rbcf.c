@@ -2409,7 +2409,7 @@ SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	  if (val==bcf_float_vector_end) {
 	  	REAL(ext)[j] = R_NaReal;
 		} else {
-			REAL(ext)[j] = val;
+			REAL(ext)[j] = (double)val;
 		}
 	}
 	free(dst);
@@ -2543,9 +2543,19 @@ SEXP VariantGenotypesSetFloatAttribute(SEXP sexpGt, SEXP sexpatt, SEXP sexpval) 
     return R_NilValue;
   }
   
+  int nsamples = bcf_hdr_nsamples(hdr);
+  
   // The length of the supplied vector
   int value_length = length(sexpval);
-  int nsamples = bcf_hdr_nsamples(hdr);
+  float *sexpval_float = (float *)malloc(value_length * sizeof(float));
+  if (!sexpval_float) {
+    BCF_WARNING("Cannot allocate float vector");
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  for (int i = 0; i < value_length; i++) {
+    sexpval_float[i] = (float)REAL(sexpval)[i];
+  }
   
   // The length-type of the field
   int fmt_length_type = bcf_hdr_id2length(hdr, BCF_HL_FMT, tag_id);
@@ -2586,11 +2596,13 @@ SEXP VariantGenotypesSetFloatAttribute(SEXP sexpGt, SEXP sexpatt, SEXP sexpval) 
     }
   }
   
-  if (bcf_update_format_float(hdr, ctx, att, REAL(sexpval), value_length) != 0) {
+  if (bcf_update_format_float(hdr, ctx, att, sexpval_float, value_length) != 0) {
+    free(sexpval_float);
     BCF_WARNING("Can not set attribute for variant for unknown reason");
     UNPROTECT(nprotect);
     return R_NilValue;
   }
+  free(sexpval_float);
   
   UNPROTECT(nprotect);
   return sexpGt;

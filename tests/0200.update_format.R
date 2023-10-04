@@ -1,4 +1,4 @@
-##Writing variants to a new VCF/BCF file
+## Setting FORMAT in variant genotypes
 # load rbcf
 library(rbcf)
 # vcf input filename
@@ -24,6 +24,11 @@ while(!is.null(vc<-bcf.next(fp))) {
   new_dp <- rnbinom(n = n_samples, size = 5, prob = 0.25)
   variant.genotypes.set.int.attribute(vc, "DP", new_dp)
   stopifnot( all(  new_dp == variant.genotypes.int.attribute(vc, "DP") ))
+
+  old_gq <- variant.genotypes.float.attribute(vc, "GQ")
+  new_gq <- rnorm(n = n_samples)
+  variant.genotypes.set.float.attribute(vc, "GQ", new_gq)
+  stopifnot( all(  new_gq - variant.genotypes.float.attribute(vc, "GQ") <  0.000001 ))
   
   # Updating GT with random allele combinations
   alleles <- c(".", as.character(0:variant.nalleles(vc)))

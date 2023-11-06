@@ -1476,73 +1476,198 @@ SEXP RBcfCtxVariantAllGtAllelesAlleleCounts(SEXP sexpCtx, SEXP sexpAlleleIndex) 
 	}
 
 SEXP RBcfCtxVariantAllGtStrings(SEXP sexpCtx) {
-	int nprotect=0;
-	int i,j,k;
-	PROTECT(sexpCtx);nprotect++;
-	
-	bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
-	bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
-	
-	// Total number of samples
-	int nsmpl = bcf_hdr_nsamples(hdr);
-
-	// Identify the max-ploidy
-	int32_t *gt_arr = NULL, ngt_arr = 0;
-	int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
-	if (gt_arr == NULL) {
-		UNPROTECT(nprotect);
-		return R_NilValue;
-	}
-	if ( ngt == 0 ) {
-		free(gt_arr);
-		UNPROTECT(nprotect);
-		return R_NilValue;
-	}
-	int max_ploidy = ngt / nsmpl;
-
-	// Allocate a temporary array. Needs to store the indizes of the alleles.
-	// We make the assumption that we will never see more than 999 different alleles
-	// and therefore allocate 3+1 characters per allele(-index)
-	char *buf = malloc(max_ploidy * 4 * sizeof(char));
-	char *buf_ptr;
+  int nprotect=0;
+  int i,j,k;
+  PROTECT(sexpCtx);nprotect++;
   
-	SEXP ext = PROTECT(allocVector(STRSXP,nsmpl));nprotect++;
+  bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+  bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+  
+  // Total number of samples
+  int nsmpl = bcf_hdr_nsamples(hdr);
+  
+  // Identify the max-ploidy
+  int32_t *gt_arr = NULL, ngt_arr = 0;
+  int ngt = bcf_get_genotypes(hdr,ctx, &gt_arr, &ngt_arr);
+  if (gt_arr == NULL) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  if ( ngt == 0 ) {
+    free(gt_arr);
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  int max_ploidy = ngt / nsmpl;
+  
+  // Allocate a temporary array. Needs to store the indizes of the alleles.
+  // We make the assumption that we will never see more than 999 different alleles
+  // and therefore allocate 3+1 characters per allele(-index)
+  char *buf = malloc(max_ploidy * 4 * sizeof(char));
+  char *buf_ptr;
+  
+  SEXP ext = PROTECT(allocVector(STRSXP,nsmpl));nprotect++;
+  
+  for (i=0; i < nsmpl; i ++) {
+    buf_ptr = buf;
+    for (j=0; j<max_ploidy; j++) {
+      k = i * max_ploidy + j;
+      
+      // If the current index is array-end, stop parsing here
+      if (gt_arr[k] == bcf_int32_vector_end) {
+        buf_ptr[0] = '\0';
+        j = max_ploidy;
+      }
+      else {
+        if (j > 0) {
+          // If this is not the first allele-index add a separator
+          if (bcf_gt_is_phased(gt_arr[k]) ){
+            buf_ptr[0] = '|';
+          } else {
+            buf_ptr[0] = '/';
+          }
+          buf_ptr++;
+        }
+        
+        // if true, the sample has smaller ploidy
+        if (bcf_gt_is_missing(gt_arr[k])) {
+          buf_ptr[0] = '.';
+          buf_ptr[1] = '\0';
+          buf_ptr++;
+        } else { 
+          buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
+          buf_ptr[0] = '\0';
+        }
+      }
+    }
+    SET_STRING_ELT(ext, i, mkChar(buf));
+  }
+  free(buf);
+  free(gt_arr);
+  
+  UNPROTECT(nprotect);
+  return ext;
+}
 
-	for (i=0; i < nsmpl; i ++) {
-		buf_ptr = buf;
-		for (j=0; j<max_ploidy; j++) {
-		  k = i * max_ploidy + j;
-		  if (j > 0) {
-				// If this is not the first allele-index add a separator
-		  	if (bcf_gt_is_phased(gt_arr[k]) ){
-					 buf_ptr[0] = '|';
-			  } else {
-			  	 buf_ptr[0] = '/';
-				}
-				buf_ptr++;
-		  }
-		  // if true, the sample has smaller ploidy
-		  if (gt_arr[k] == bcf_int32_vector_end) {
-		     buf_ptr[0] = '-';
-		     buf_ptr[1] = '\0';
-				 buf_ptr += 2;
-		  }
-		  else if (bcf_gt_is_missing(gt_arr[k])) {
-		     buf_ptr[0] = '.';
-		     buf_ptr[1] = '\0';
-				 buf_ptr += 2;
-		  } else {
-				buf_ptr += sprintf(buf_ptr, "%d", bcf_gt_allele(gt_arr[k]));
-		  }
-		}
-		SET_STRING_ELT(ext, i, mkChar(buf));
-   }
-	free(buf);
-	free(gt_arr);
-
-	UNPROTECT(nprotect);
-	return ext;
-	}
+SEXP VariantGenotypesSetAllGtStrings(SEXP sexpCtx, SEXP sexpAllele) {
+  if (TYPEOF(sexpAllele) != STRSXP) {
+    BCF_ERROR("Genotype allele is not a character vector (STRSXP)");
+  }
+  
+  int nprotect=0;
+  PROTECT(sexpCtx);nprotect++;
+  PROTECT(sexpAllele);nprotect++;
+  
+  bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,0));
+  bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpCtx,1));
+  
+  // Total number of samples
+  int32_t n_samples = bcf_hdr_nsamples(hdr);
+  int32_t n_alleles = ctx->n_allele;
+  
+  // Use a buffer to contain the current genotype (this copy will be modified by strtok()) 
+  char gt_pointer_cpy[128];
+  char delimiter[] = "/|";
+  
+  
+  // Determine the max ploidy to know the size of needed array
+  int max_ploidy = 0;
+  for (int sidx = 0; sidx < n_samples; sidx++) {
+    int cur_ploidy = 0;
+    char const *gt_pointer = CHAR(STRING_ELT(sexpAllele, sidx));
+    if (!strcpy(gt_pointer_cpy, gt_pointer)) {
+      BCF_ERROR("Can not copy gt-string");
+    }
+    char *ptr = strtok(gt_pointer_cpy, delimiter);
+    while(ptr != NULL) {
+      cur_ploidy++;
+      ptr = strtok(NULL, delimiter);
+    }
+    
+    if (cur_ploidy > max_ploidy) {
+      max_ploidy = cur_ploidy;
+    }
+  }
+  
+  // Allocate an array to encode the genotypes
+  int32_t ngt_arr = n_samples * max_ploidy;
+  int32_t *gt_arr = malloc(ngt_arr * sizeof(int32_t));
+  if (gt_arr == NULL) {
+    BCF_WARNING("Can not allocate array to encode genotypes");
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  // start parsing the GT and insert them into the array
+  for (int sidx = 0; sidx < n_samples; sidx++) {
+    int cur_ploidy = 0;
+    char const *gt_pointer = CHAR(STRING_ELT(sexpAllele, sidx));
+    
+    // Do not parse the genotype if it is an empty one
+    if (strcmp(".", gt_pointer) == 0) {
+      int gt_idx = (sidx * max_ploidy);
+      gt_arr[gt_idx] = bcf_gt_missing;
+      cur_ploidy++;
+    } else {
+      if (!strcpy(gt_pointer_cpy, gt_pointer)) {
+        BCF_ERROR("Can not copy gt-string");
+      }
+      //LOG("Processing sample %d with GT '%s'", sidx, gt_pointer);
+      
+      // initialisieren und ersten Abschnitt erstellen
+      char *ptr = strtok(gt_pointer_cpy, delimiter);
+      short is_phased = gt_pointer[ strlen(ptr) ] == '|' ? 1 : 0;
+      while(ptr != NULL) {
+        if (cur_ploidy > max_ploidy) {
+          BCF_ERROR("Number of genotypes in sample %i ('%s') exceeds expected maximum ploidy of %d", sidx, gt_pointer, max_ploidy);
+        }
+        
+        //LOG("Allele found: '%s'", ptr);
+        int current_gt = bcf_gt_missing;
+        if (strncmp(".", ptr, 2) == 0) {
+          current_gt = bcf_gt_missing;
+        } else if (strncmp("-", ptr, 2) == 0) {
+          current_gt = bcf_int32_vector_end;
+        } else {
+          errno = 0;
+          long allele_idx = strtol(ptr, NULL, 10);
+          if (errno == ERANGE || allele_idx < 0 || allele_idx > n_alleles) {
+            BCF_ERROR("Parsed allele-index %l is out of range for %d alleles", allele_idx, n_alleles);
+          }
+          current_gt = is_phased > 0 ? bcf_gt_phased(allele_idx) : bcf_gt_unphased(allele_idx);
+        }
+        
+        // Calculate the index of the genotype in the data
+        int gt_idx = (sidx * max_ploidy) + cur_ploidy;
+        cur_ploidy++;
+        gt_arr[gt_idx] = current_gt;
+        //LOG("Updated index %d with value %d", gt_idx, gt_arr[gt_idx]);
+        
+        ptr = strtok(NULL, delimiter);
+      }
+    }
+    // Fill up the sample indizes in case we have lower ploidy for this sample
+    while(cur_ploidy < max_ploidy) {
+      int gt_idx = (sidx * max_ploidy) + cur_ploidy;
+      cur_ploidy++;
+      gt_arr[gt_idx] = bcf_int32_vector_end;
+    }
+  }
+  
+  if (bcf_update_genotypes(hdr, ctx, gt_arr, ngt_arr) < 0) {
+    free(gt_arr);
+    BCF_ERROR("Can not update genotypes");
+  }
+  
+  free(gt_arr);
+  
+  // Return a single int
+  SEXP ext = PROTECT(allocVector(INTSXP,1));nprotect++;	
+  INTEGER(ext)[0] = 1;
+  
+  UNPROTECT(nprotect);
+  return ext;
+}
 
 SEXP GenotypeSample(SEXP sexpGt) {
         int nprotect=0;
@@ -2264,7 +2389,7 @@ SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	}
 	
 	int ndst=0;
-	int32_t* dst=NULL;
+	float* dst=NULL;
 	int ret=bcf_get_format_float(hdr,ctx,att,(void**)&dst,&ndst);
 	if(dst == NULL) {
 		UNPROTECT(nprotect);
@@ -2280,11 +2405,11 @@ SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	SEXP ext = PROTECT(allocVector(REALSXP,ndst));nprotect++;	
 	int j = 0;
 	for (; j< ndst; j++) {
-	  int32_t val = dst[j];
+	  float val = dst[j];
 	  if (val==bcf_float_vector_end) {
 	  	REAL(ext)[j] = R_NaReal;
 		} else {
-			REAL(ext)[j] = val;
+			REAL(ext)[j] = (double)val;
 		}
 	}
 	free(dst);
@@ -2293,4 +2418,192 @@ SEXP VariantGenotypesFloatAttribute(SEXP sexpCtx,SEXP sexpatt) {
 	return ext;
 }
 
+SEXP VariantGenotypesSetInt32Attribute(SEXP sexpGt, SEXP sexpatt, SEXP sexpval) {
+  int nprotect=0;
+  
+  PROTECT(sexpGt);nprotect++;
+  PROTECT(sexpatt);nprotect++;
+  PROTECT(sexpval);nprotect++;
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpGt);
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpatt);
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpval);
+  
+  bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+  if (!hdr) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+  if (!ctx) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  const char* att = CHAR(asChar(sexpatt));
+  if (!att) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  bcf_unpack(ctx, BCF_UN_FMT);
+  
+  // Check if the attribute can be found in the 
+  int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+  if(!bcf_hdr_idinfo_exists(hdr, BCF_HL_FMT, tag_id)) {
+    BCF_WARNING("No header information exists for attribute '%s'", att);
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  // The length of the supplied vector
+  int value_length = length(sexpval);
+  int nsamples = bcf_hdr_nsamples(hdr);
+  
+  // The length-type of the field
+  int fmt_length_type = bcf_hdr_id2length(hdr, BCF_HL_FMT, tag_id);
+  if (fmt_length_type == BCF_VL_FIXED) {
+    int expected_length = bcf_hdr_id2number(hdr, BCF_HL_FMT, tag_id) * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' is %d but got a vector of %d values", att, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_VAR) {
+    // We expect any multiple of n_samples
+    if (value_length % nsamples != 0) {
+      BCF_WARNING("Expected that values contains any multiple of %d entries for attribute '%s' but got %d", att, nsamples, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_A) {
+    int expected_length = (ctx->n_allele - 1) * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type A and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_R) {
+    int expected_length = ctx->n_allele * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type R and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_G) {
+    int expected_length = ((ctx->n_allele^2) +  ctx->n_allele) / 2 * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type G and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  }
+  
+  if (bcf_update_format_int32(hdr, ctx, att, INTEGER(sexpval), value_length) != 0) {
+    BCF_WARNING("Can not set attribute for variant for unknown reason");
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  UNPROTECT(nprotect);
+  return sexpGt;
+}
 
+SEXP VariantGenotypesSetFloatAttribute(SEXP sexpGt, SEXP sexpatt, SEXP sexpval) {
+  int nprotect=0;
+  
+  PROTECT(sexpGt);nprotect++;
+  PROTECT(sexpatt);nprotect++;
+  PROTECT(sexpval);nprotect++;
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpGt);
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpatt);
+  IF_NULL_UNPROTECT_AND_RETURN_NULL(sexpval);
+  
+  bcf_hdr_t*	hdr = (bcf_hdr_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,0));
+  if (!hdr) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  bcf1_t* ctx = (bcf1_t*)R_ExternalPtrAddr(VECTOR_ELT(sexpGt,1));
+  if (!ctx) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  const char* att = CHAR(asChar(sexpatt));
+  if (!att) {
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  bcf_unpack(ctx, BCF_UN_FMT);
+  
+  // Check if the attribute can be found in the 
+  int tag_id = bcf_hdr_id2int(hdr, BCF_DT_ID, att);
+  if(!bcf_hdr_idinfo_exists(hdr, BCF_HL_FMT, tag_id)) {
+    BCF_WARNING("No header information exists for attribute '%s'", att);
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  
+  int nsamples = bcf_hdr_nsamples(hdr);
+  
+  // The length of the supplied vector
+  int value_length = length(sexpval);
+  float *sexpval_float = (float *)malloc(value_length * sizeof(float));
+  if (!sexpval_float) {
+    BCF_WARNING("Cannot allocate float vector");
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  for (int i = 0; i < value_length; i++) {
+    sexpval_float[i] = (float)REAL(sexpval)[i];
+  }
+  
+  // The length-type of the field
+  int fmt_length_type = bcf_hdr_id2length(hdr, BCF_HL_FMT, tag_id);
+  if (fmt_length_type == BCF_VL_FIXED) {
+    int expected_length = bcf_hdr_id2number(hdr, BCF_HL_FMT, tag_id) * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' is %d but got a vector of %d values", att, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_VAR) {
+    // We expect any multiple of n_samples
+    if (value_length % nsamples != 0) {
+      BCF_WARNING("Expected that values contains any multiple of %d entries for attribute '%s' but got %d", att, nsamples, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_A) {
+    int expected_length = (ctx->n_allele - 1) * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type A and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_R) {
+    int expected_length = ctx->n_allele * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type R and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  } else if (fmt_length_type == BCF_VL_G) {
+    int expected_length = ((ctx->n_allele^2) +  ctx->n_allele) / 2 * nsamples;
+    if (value_length != expected_length) {
+      BCF_WARNING("Expected length for attribute '%s' with type G and %d alleles is %d but got a vector of %d values", att, ctx->n_allele, expected_length, value_length);
+      UNPROTECT(nprotect);
+      return R_NilValue;
+    }
+  }
+  
+  if (bcf_update_format_float(hdr, ctx, att, sexpval_float, value_length) != 0) {
+    free(sexpval_float);
+    BCF_WARNING("Can not set attribute for variant for unknown reason");
+    UNPROTECT(nprotect);
+    return R_NilValue;
+  }
+  free(sexpval_float);
+  
+  UNPROTECT(nprotect);
+  return sexpGt;
+}

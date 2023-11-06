@@ -793,6 +793,87 @@ variant.genotypes.float.attribute <- function(vc, att) {
 	.Call("VariantGenotypesFloatAttribute", vc, att)
 }
 
+#' Set a specific FORMAT integer value on all genotypes
+#'
+#' The vector must contain the values by sample and attribute number (if the attribute comprises multiple integer values).
+#'
+#' For example, for a 3 sample VCF setting the allelic read depth (AD) on a singleton variant, the would look like:
+#' ```
+#'   GT1-REF, GT1-ALT, GT2-REF, GT2-ALT, GT3-REF, GT3-ALT
+#' c(     10,     100,      25,      94,      45,       7)
+#' ```
+#'
+#' @param vc the variant
+#' @param att a character vector containing the variant attribute
+#' @param values a numeric vector to set the value (will be converted to integer)
+#'
+#' @return the variant `vc`
+#'
+#' @seealso
+#'    \link{variant.genotypes.int.attribute}
+#'
+variant.genotypes.set.int.attribute <- function(vc, att, values) {
+  stopifnot(looks_like_variant_context(vc))
+  stopifnot(is.character(att))
+  stopifnot(length(att) == 1)
+  stopifnot(is.numeric(values))
+  .Call("VariantGenotypesSetInt32Attribute", vc, att, as.integer(values))
+}
+
+#' Set a specific FORMAT float value on all genotypes
+#'
+#' The vector must contain the values by sample and attribute number (if the attribute comprises multiple integer values).
+#'
+#' For example, for a 3 sample VCF setting the allelic read fraction (AF) on a singleton variant, the would look like:
+#' ```
+#'   GT1-AF, GT2-AF, GT3-AF
+#' c(   1.0,    0.8,   0.25)
+#' ```
+#'
+#' @param vc the variant
+#' @param att a character vector containing the variant attribute
+#' @param values a numeric vector to set the value (will be converted to float)
+#'
+#' @return the variant `vc`
+#'
+#' @seealso
+#'    \link{variant.genotypes.int.attribute}
+#'
+variant.genotypes.set.float.attribute <- function(vc, att, values) {
+  stopifnot(looks_like_variant_context(vc))
+  stopifnot(is.character(att))
+  stopifnot(length(att) == 1)
+  stopifnot(is.numeric(values))
+  .Call("VariantGenotypesSetFloatAttribute", vc, att, values)
+}
+
+#' Set the genotypes `FORMAT/GT` for all genotype call of a variant
+#'
+#' The vector must contain the values in the order of `bcf.samples`:
+#' ```
+#'   Sample1, Sample2, Sample3
+#' c(  "0/1",   "0/0",      NA)
+#' ```
+#' 
+#' The `NA` will be replaces by ".".
+#'
+#' @param vc the variant
+#' @param values a characters vector containing the genotype calls (see details)
+#'
+#' @return the variant `vc`
+#'
+#' @seealso
+#'    \link{variant.genotypes.allele.strings}
+#'
+variant.genotypes.set.allele.strings <- function(vc, values) {
+  stopifnot(looks_like_variant_context(vc))
+  stopifnot(is.character(values))
+  values[ is.na(values) ] <- "."
+  .Call("VariantGenotypesSetAllGtStrings", vc, as.character(values))
+}
+
+
+
 #' @param gt the genotype
 #' @param att the key
 #' @return the values for this key+genotype
